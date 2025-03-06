@@ -1,0 +1,12 @@
+auth_info
+node_modules/
+*.mp4
+*.mp3
+*.webm
+*.avi
+*.mov
+*.flv
+*.wav
+*.m4a
+*.ogg
+*.wma
