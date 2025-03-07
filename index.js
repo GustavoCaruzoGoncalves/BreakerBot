@@ -1,6 +1,9 @@
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
-const commandsBot = require('./commands');
+const imagesCommandsBot = require('./imagesCommands');
+const audioCommandsBot = require('./audioCommands');
+const jokesCommandsBot = require('./jokesCommands')
+const menuCommandBot = require('./menuCommand')
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
@@ -26,9 +29,12 @@ async function startBot() {
             console.log("Bot conectado com sucesso!");
         }
     });
-    
-    sock.ev.on('messages.upsert', async (messages) => {
-        await commandsBot(sock, messages);
+
+    sock.ev.on('messages.upsert', async (messages) => {    
+        await imagesCommandsBot(sock, messages);
+        await audioCommandsBot(sock, messages);
+        await jokesCommandsBot(sock, messages);
+        await menuCommandBot(sock, messages);
     });
 }
 
