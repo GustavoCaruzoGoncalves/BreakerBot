@@ -17,10 +17,10 @@ async function imagesCommandsBot(sock, { messages }) {
     const isImage = messageType === 'imageMessage';
     const isReplyToImage = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
     const isReplyToSticker = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.stickerMessage;
-    const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    const messageWithText = msg.message.imageMessage?.caption || msg.message.extendedTextMessage?.text || '';
 
-    if (textMessage.startsWith("!sticker") || isImage) {
-        console.log("[DEBUG] Comando !sticker detectado");
+    if (messageWithText.startsWith("!sticker") || messageWithText.startsWith("!fsticker")) {
+        console.log("[DEBUG] Comando de figurinha detectado");
 
         if (isImage || isReplyToImage) {
             try {
@@ -40,8 +40,16 @@ async function imagesCommandsBot(sock, { messages }) {
 
                 const stickerPath = path.join(__dirname, 'sticker.webp');
 
-                console.log("[DEBUG] Convertendo imagem para WebP...");
-                await sharp(buffer).resize(512, 512).webp().toFile(stickerPath);
+                console.log("[DEBUG] Processando imagem...");
+                const sharpInstance = sharp(buffer).webp();
+
+                if (messageWithText.startsWith("!sticker")) {
+                    sharpInstance.resize(1080, 1920, { fit: 'cover' });
+                } else if (messageWithText.startsWith("!fsticker")) {
+                    sharpInstance.resize(512, 512, { fit: 'cover' });
+                }
+
+                await sharpInstance.toFile(stickerPath);
 
                 if (!fs.existsSync(stickerPath)) {
                     console.log("[ERRO] Arquivo WebP não foi gerado.");
@@ -62,11 +70,16 @@ async function imagesCommandsBot(sock, { messages }) {
             }
         } else {
             console.log("[DEBUG] Nenhuma imagem detectada para criar sticker.");
-            await sock.sendMessage(sender, { text: "Envie ou responda a uma imagem com `!sticker`!" }, { quoted: msg });
+            await sock.sendMessage(sender, { text: "Envie ou responda a uma imagem com `!sticker` ou `!fsticker`!" }, { quoted: msg });
         }
     }
 
-    if (textMessage.startsWith("!toimg") && isReplyToSticker) {
+    if (messageWithText.startsWith("!toimg") && isReplyToSticker) {
+        if (isSticker) {
+            console.log("[DEBUG] A mensagem é uma figurinha, evitando envio junto com o !toimg.");
+            return;
+        }
+
         try {
             console.log("[DEBUG] Convertendo figurinha para imagem...");
             let mediaMessage = msg.message.extendedTextMessage.contextInfo.quotedMessage.stickerMessage;
