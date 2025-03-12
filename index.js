@@ -7,6 +7,17 @@ const menuCommandBot = require('./menuCommand')
 const gptCommandBot = require('./gptCommand')
 const gamesCommandsBot = require('./gamesCommands')
 
+async function connectBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+}
+
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
