@@ -58,7 +58,7 @@ async function gamesCommandsBot(sock, { messages }) {
         askNextQuestion(sock, chatId);
     }
 
-    else if (text.startsWith("!trivia resposta")) {
+    else if (text && text.startsWith("!trivia resposta")) {
         const userAnswer = text.split(" ")[2];
         if (!userAnswer) return;
 
