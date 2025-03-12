@@ -4,6 +4,8 @@ const imagesCommandsBot = require('./imagesCommands');
 const audioCommandsBot = require('./audioCommands');
 const jokesCommandsBot = require('./jokesCommands')
 const menuCommandBot = require('./menuCommand')
+const gptCommandBot = require('./gptCommand')
+const gamesCommandsBot = require('./gamesCommands')
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
@@ -35,6 +37,8 @@ async function startBot() {
         await audioCommandsBot(sock, messages);
         await jokesCommandsBot(sock, messages);
         await menuCommandBot(sock, messages);
+        await gptCommandBot(sock, messages);
+        await gamesCommandsBot(sock, messages)
     });
 }
 
