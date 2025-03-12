@@ -38,7 +38,7 @@ pip install -r requirements.txt
 ```sh
 npm start
 ```
-## The bot will prompt you with a QR Code on the terminal during its first execution.
+The bot will prompt you with a QR Code on the terminal during its first execution.
 
 #### **5. Runnning the bot in servers or PCs** 
 
@@ -51,7 +51,7 @@ npm start
 ```sh
 npm run server
 ```
-## Only run this command after running and authenticating the bot once with npm start!
+Only run this command after running and authenticating the bot once with npm start!
 
 ### Running the bot automatically when the machine boots
 ```sh
@@ -60,11 +60,11 @@ pm2 save
 pm2 startup
 ```
 
-### Error Handling & Logging
-## BreakerBot includes an integrated logging mechanism that captures errors and logs them to error.log. If the bot encounters unexpected failures, it will attempt automatic reconnection.
+## Error Handling & Logging
+### BreakerBot includes an integrated logging mechanism that captures errors and logs them to error.log. If the bot encounters unexpected failures, it will attempt automatic reconnection.
 
-### License
-## This project is licensed under the MIT License. Feel free to modify and expand its functionality as needed.
+## License
+### This project is licensed under the MIT License. Feel free to modify and expand its functionality as needed.
 
-### Contributing
-## We welcome contributions! If you want to improve BreakerBot, submit a pull request or open an issue in the repository.
+## Contributing
+### We welcome contributions! If you want to improve BreakerBot, submit a pull request or open an issue in the repository.
