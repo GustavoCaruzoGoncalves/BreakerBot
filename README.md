@@ -61,10 +61,10 @@ pm2 startup
 ```
 
 ## Error Handling & Logging
-### BreakerBot includes an integrated logging mechanism that captures errors and logs them to error.log. If the bot encounters unexpected failures, it will attempt automatic reconnection.
+BreakerBot includes an integrated logging mechanism that captures errors and logs them to error.log. If the bot encounters unexpected failures, it will attempt automatic reconnection.
 
 ## License
-### This project is licensed under the MIT License. Feel free to modify and expand its functionality as needed.
+This project is licensed under the MIT License. Feel free to modify and expand its functionality as needed.
 
 ## Contributing
-### We welcome contributions! If you want to improve BreakerBot, submit a pull request or open an issue in the repository.
+We welcome contributions! If you want to improve BreakerBot, submit a pull request or open an issue in the repository.
