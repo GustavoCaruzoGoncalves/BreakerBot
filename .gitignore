@@ -11,4 +11,4 @@ node_modules/
 *.ogg
 *.wma
 *.env
-.env
+*.log

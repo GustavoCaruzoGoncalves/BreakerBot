@@ -7,6 +7,7 @@ const jokesCommandsBot = require('./jokesCommands');
 const menuCommandBot = require('./menuCommand');
 const gptCommandBot = require('./gptCommand');
 const gamesCommandsBot = require('./gamesCommands');
+const grokCommandBot = require('./grokCommand');
 
 const logError = (error) => {
     const errorMsg = `[${new Date().toISOString()}] ${error.stack || error.message || error}\n`;
@@ -57,6 +58,7 @@ async function connectBot() {
                 await menuCommandBot(sock, messages);
                 await gptCommandBot(sock, messages);
                 await gamesCommandsBot(sock, messages);
+                await grokCommandBot(sock, messages);
             } catch (err) {
                 console.error('Erro ao processar mensagem:', err);
                 logError(err);
