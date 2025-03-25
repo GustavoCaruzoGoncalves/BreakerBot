@@ -15,9 +15,7 @@ BreakerBot is a powerful and interactive WhatsApp bot designed to enhance user e
 ### **Prerequisites**  
 Ensure that you have the following installed on your system:  
 - **Node.js** (v16 or later recommended)  
-- **npm** or **yarn**  
-- **Python 3** (required for `yt-dlp`)  
-- **pip** (Python package manager)  
+- **npm** or **yarn**   
 - **pm2** (Optional, for process management)  
 
 ### **Installation Steps**  
@@ -30,17 +28,13 @@ cd BreakerBot
 ```sh
 npm install
 ```
-#### **3. Install Python Dependencies**  
-```sh
-pip install -r requirements.txt
-```
-#### **4. Run the Bot to authenticate**  
+#### **3. Run the Bot to authenticate**  
 ```sh
 npm start
 ```
 The bot will prompt you with a QR Code on the terminal during its first execution.
 
-#### **5. Runnning the bot in servers or PCs** 
+#### **4. Runnning the bot in servers or PCs** 
 
 ### Without pm2 (seeing logs and messages in console)
 ```sh
