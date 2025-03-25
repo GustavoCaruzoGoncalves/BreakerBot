@@ -24,6 +24,7 @@ async function menuCommandBot(sock, { messages }) {
 ✅ *!gpt* - Fale com o Chat GPT.\n
 ✅ *!grok* - Fale com o Grok.\n
 ✅ *!grokangry* - Fale com o Grok sendo rude.\n
+✅ *!grokimage* - Gere imagens com o Grok.\n
 ✅ *!trivia* - Brinque de acertar respostas. Use !trivia start para começar e !trivia resposta (digite sua resposta agora) para responder!\n`;
 
             await sock.sendMessage(sender, { text: menuText }, { quoted: msg });
