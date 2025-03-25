@@ -22,11 +22,11 @@ async function grokCommandBot(sock, { messages }) {
         } else {
             await sock.sendMessage(chatId, { text: "Não foi possível gerar a imagem." });
         }
-    } else if (text.startsWith("!grok")) {
+    } else if (text.startsWith("!grok ")) {
         const query = text.replace("!grok", "").trim();
         const response = await askGrok(query);
         await sock.sendMessage(chatId, { text: response });
-    } else if (text.startsWith("!grokangry")) {
+    } else if (text.startsWith("!grokangry ")) {
         const query = text.replace("!grokangry", "").trim();
         const response = await askGrokAngry(query);
         await sock.sendMessage(chatId, { text: response });
