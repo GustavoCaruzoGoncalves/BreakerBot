@@ -1,150 +1,151 @@
 const fs = require('fs');
-const { exec } = require('child_process');
 const path = require('path');
-const ffmpegPath = require('ffmpeg-static');
+const ytdl = require('yt-dlp-exec');
 const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 async function audioCommandsBot(sock, { messages }) {
     const msg = messages[0];
-        if (!msg.message || !msg.key.remoteJid) return;
+    if (!msg.message || !msg.key.remoteJid) return;
 
-        const sender = msg.key.remoteJid;
-        const messageType = Object.keys(msg.message)[0];
-        const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+    const sender = msg.key.remoteJid;
+    const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
-        if (textMessage.startsWith("!play ")) {
+    if (textMessage.startsWith('!play ')) {
+        const audioPath = path.join(__dirname, 'temp_audio.webm');
+        const outputPath = path.join(__dirname, 'temp_audio.mp3');
+        
+        try {
+            const query = textMessage.replace('!play ', '').trim();
+            if (!query) {
+                await sock.sendMessage(sender, { text: 'Por favor, digite o nome ou link da música! 🎵' }, { quoted: msg });
+                return;
+            }
+
+            await sock.sendMessage(sender, { text: `🎵 Buscando: *${query}*...` }, { quoted: msg });
+
+            await ytdl(query, {
+                output: audioPath,
+                format: 'bestaudio',
+                noCheckCertificates: true,
+                preferFreeFormats: true,
+            });
+
+            await new Promise((resolve, reject) => {
+                ffmpeg(audioPath)
+                    .toFormat('mp3')
+                    .audioBitrate('128k')
+                    .audioChannels(2)
+                    .audioFrequency(44100)
+                    .outputOptions(['-threads', '1'])
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .save(outputPath);
+            });
+
+            const audio = fs.readFileSync(outputPath);
+            await sock.sendMessage(sender, { 
+                audio, 
+                mimetype: 'audio/mp4',
+                fileName: query + '.mp3'
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('Erro ao processar áudio:', error);
+            await sock.sendMessage(sender, { text: 'Desculpe, ocorreu um erro ao baixar a música! 😢' }, { quoted: msg });
+        } finally {
             try {
-                const query = textMessage.replace("!play ", "").trim();
-                if (!query) {
-                    await sock.sendMessage(sender, { text: "Digite um nome ou link de vídeo do YouTube! 🎵" }, { quoted: msg });
-                    return;
-                }
-
-                console.log(`[DEBUG] Buscando música para: ${query}`);
-                const audioPath = path.join(__dirname, 'audio.mp3');
-                const tempAudioPath = path.join(__dirname, 'temp_audio.mp3');
-
-                await sock.sendMessage(sender, { text: `🎶 Baixando: *${query}*...` }, { quoted: msg });
-
-                console.log("[DEBUG] Iniciando download com yt-dlp...");
-                exec(`yt-dlp -x --audio-format mp3 --ffmpeg-location "${ffmpegPath}" -o "${audioPath}" "${query}"`, async (error, stdout, stderr) => {
-                    if (error) {
-                        console.error("[ERRO] Falha ao baixar música:", error);
-                        await sock.sendMessage(sender, { text: "Erro ao baixar a música! 😢" }, { quoted: msg });
-                        return;
-                    }
-
-                    console.log("[DEBUG] Download concluído, processando áudio...");
-
-                    ffmpeg(audioPath)
-                        .audioBitrate(128)
-                        .toFormat('mp3')
-                        .save(tempAudioPath)
-                        .on('end', async () => {
-                            fs.renameSync(tempAudioPath, audioPath);
-
-                            console.log("[DEBUG] Áudio processado, enviando...");
-                            const audio = fs.readFileSync(audioPath);
-                            await sock.sendMessage(sender, { audio, mimetype: 'audio/mp4' }, { quoted: msg });
-
-                            fs.unlinkSync(audioPath);
-                            console.log("[DEBUG] Música enviada com sucesso!");
-                        })
-                        .on('error', (err) => {
-                            console.error("[ERRO] Falha ao processar áudio:", err);
-                            fs.unlinkSync(audioPath);
-                            sock.sendMessage(sender, { text: "Erro ao processar a música! 😢" }, { quoted: msg });
-                        });
-                });
-
+                if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
             } catch (err) {
-                console.error("[ERRO] Falha ao baixar música:", err);
-                await sock.sendMessage(sender, { text: "Erro ao baixar a música! 😢" }, { quoted: msg });
+                console.error('Erro ao limpar arquivos temporários:', err);
             }
         }
+    }
 
-        if (textMessage.startsWith("!playmp4 ")) {
-            try {
-                const query = textMessage.replace("!playmp4 ", "").trim();
-                if (!query) {
-                    await sock.sendMessage(sender, { text: "Digite um nome ou link de vídeo do YouTube! 🎥" }, { quoted: msg });
-                    return;
+    if (textMessage.startsWith('!playmp4 ')) {
+        const videoPath = path.join(__dirname, 'temp_video.mp4');
+        const outputPath = path.join(__dirname, 'temp_video_processed.mp4');
+
+        try {
+            const query = textMessage.replace('!playmp4 ', '').trim();
+            if (!query) {
+                await sock.sendMessage(sender, { text: 'Por favor, digite o nome ou link do vídeo! 🎥' }, { quoted: msg });
+                return;
+            }
+
+            await sock.sendMessage(sender, { text: `🎥 Buscando: *${query}*...` }, { quoted: msg });
+
+            const isShort = query.includes('youtube.com/shorts/');
+            
+            await ytdl(query, {
+                output: videoPath,
+                format: isShort ? 'best' : 'best[height<=480]',
+                noCheckCertificates: true,
+                preferFreeFormats: true,
+                addHeader: [
+                    'referer:youtube.com',
+                    'user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+                ]
+            });
+
+            await new Promise((resolve, reject) => {
+                let ffmpegCommand = ffmpeg(videoPath)
+                    .outputOptions([
+                        '-c:v libx264',
+                        '-preset veryfast',
+                        '-crf 35',
+                        '-maxrate 1M',
+                        '-bufsize 2M',
+                        '-c:a aac',
+                        '-b:a 96k',
+                        '-movflags +faststart',
+                        '-threads 1'
+                    ]);
+
+                if (!isShort) {
+                    ffmpegCommand.outputOptions(['-vf', 'scale=480:-2']);
                 }
 
-                console.log(`[DEBUG] Buscando vídeo para: ${query}`);
+                ffmpegCommand
+                    .toFormat('mp4')
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .save(outputPath);
+            });
 
-                const videoPath = path.join(__dirname, 'video');
-                const audioPath = path.join(__dirname, 'audio');
-                const outputPath = path.join(__dirname, 'video_with_audio.mp4');
+            const stats = fs.statSync(outputPath);
+            const fileSizeInMB = stats.size / (1024 * 1024);
 
-                console.log(`[DEBUG] Caminho do vídeo: ${videoPath}`);
-                console.log(`[DEBUG] Caminho do áudio: ${audioPath}`);
+            if (fileSizeInMB > 15) {
+                throw new Error('Arquivo muito grande: ' + fileSizeInMB.toFixed(2) + 'MB');
+            }
 
-                await sock.sendMessage(sender, { text: `🎬 Baixando: *${query}*...` }, { quoted: msg });
+            const video = fs.readFileSync(outputPath);
+            await sock.sendMessage(sender, { 
+                video,
+                caption: `✨ ${query}`,
+                mimetype: 'video/mp4'
+            }, { quoted: msg });
 
-                console.log("[DEBUG] Iniciando download com yt-dlp...");
-                exec(`yt-dlp -f bestvideo+bestaudio --merge-output-format mp4 -o "${videoPath}-%(id)s.%(ext)s" "${query}"`, async (error, stdout, stderr) => {
-                    if (error) {
-                        console.error("[ERRO] Falha ao baixar vídeo:", error);
-                        await sock.sendMessage(sender, { text: "Erro ao baixar o vídeo! 😢" }, { quoted: msg });
-                        return;
-                    }
-
-                    console.log("[DEBUG] Vídeo e áudio baixados, agora combinando...");
-
-                    const files = fs.readdirSync(__dirname);
-                    console.log(`[DEBUG] Arquivos no diretório atual: ${files}`);
-
-                    const videoFile = files.find(file => file.endsWith('.mp4') && file.includes('video'));
-                    const audioFile = files.find(file => file.endsWith('.webm') && file.includes('video'));
-
-                    if (!videoFile || !audioFile) {
-                        console.error("[ERRO] Arquivos de vídeo ou áudio não encontrados.");
-                        await sock.sendMessage(sender, { text: "Erro ao encontrar os arquivos de vídeo ou áudio! 😢" }, { quoted: msg });
-                        return;
-                    }
-
-                    const videoFilePath = path.join(__dirname, videoFile);
-                    const audioFilePath = path.join(__dirname, audioFile);
-
-                    console.log(`[DEBUG] Vídeo encontrado: ${videoFilePath}`);
-                    console.log(`[DEBUG] Áudio encontrado: ${audioFilePath}`);
-
-                    console.log(`[DEBUG] Vídeo encontrado: ${videoFilePath}`);
-                    console.log(`[DEBUG] Áudio encontrado: ${audioFilePath}`);
-
-                    ffmpeg()
-                        .input(videoFilePath)
-                        .input(audioFilePath)
-                        .output(outputPath)
-                        .audioCodec('aac')
-                        .videoCodec('copy')
-                        .on('end', async () => {
-                            console.log("[DEBUG] Arquivo combinado com sucesso!");
-
-                            const video = fs.readFileSync(outputPath);
-                            await sock.sendMessage(sender, { video, mimetype: 'video/mp4' }, { quoted: msg });
-
-                            fs.unlinkSync(videoFilePath);
-                            fs.unlinkSync(audioFilePath);
-                            fs.unlinkSync(outputPath);
-
-                            console.log("[DEBUG] Vídeo enviado com sucesso!");
-                        })
-                        .on('error', async (err) => {
-                            console.error("[ERRO] Falha ao combinar o vídeo e o áudio:", err);
-                            await sock.sendMessage(sender, { text: "Erro ao combinar vídeo e áudio! 😢" }, { quoted: msg });
-                        })
-                        .run();
-                });
-
+        } catch (error) {
+            console.error('Erro ao processar vídeo:', error);
+            await sock.sendMessage(sender, { 
+                text: error.message.includes('muito grande') 
+                    ? 'Desculpe, o vídeo é muito grande para ser enviado! Tente um vídeo mais curto. 😢' 
+                    : 'Desculpe, ocorreu um erro ao baixar o vídeo! 😢'
+            }, { quoted: msg });
+        } finally {
+            try {
+                if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
             } catch (err) {
-                console.error("[ERRO] Falha ao baixar vídeo:", err);
-                await sock.sendMessage(sender, { text: "Erro ao baixar o vídeo! 😢" }, { quoted: msg });
+                console.error('Erro ao limpar arquivos temporários:', err);
             }
         }
+    }
 }
 
 module.exports = audioCommandsBot;
