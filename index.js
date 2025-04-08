@@ -1,8 +1,6 @@
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
-const os = require('os');
-const { exec } = require('child_process');  
 const imagesCommandsBot = require('./imagesCommands');
 const audioCommandsBot = require('./audioCommands');
 const jokesCommandsBot = require('./jokesCommands');
@@ -10,9 +8,6 @@ const menuCommandBot = require('./menuCommand');
 const gptCommandBot = require('./gptCommand');
 const gamesCommandsBot = require('./gamesCommands');
 const grokCommandBot = require('./grokCommand');
-
-const isWindows = os.platform() === 'win32';
-const clearCommand = isWindows ? 'cls' : 'clear';
 
 const logError = (error) => {
     const errorMsg = `[${new Date().toISOString()}] ${error.stack || error.message || error}\n`;
@@ -48,9 +43,7 @@ async function connectBot() {
             if (connection === 'close') {
                 const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
                 console.log("Conexão fechada, tentando reconectar:", shouldReconnect);
-                if (shouldReconnect) {
-                    connectBot()
-                };
+                if (shouldReconnect) connectBot();
             } else if (connection === 'open') {
                 console.log("Bot conectado com sucesso!");
             }
