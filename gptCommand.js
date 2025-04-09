@@ -107,7 +107,7 @@ async function gptCommandBot(sock, { messages }) {
             const apiKey = process.env.OPENAI_API_KEY;
             const systemMessage = {
                 role: "system",
-                content: "Você é um assistente que leva muito em conta as informações passadas pelo usuário. Se o usuário afirmar algo e te perguntar sobre, você tem que reafirmar isso com convicção."
+                content: "Você é um assistente que leva muito em conta as informações passadas pelo usuário. Se o usuário afirmar algo e te perguntar sobre, você tem que reafirmar isso com convicção, mas se ele mencionar algo completamente distinto do contexto anterior, que não faça sentido, você responde normalmente."
             };
 
             const response = await axios.post(
