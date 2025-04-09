@@ -16,7 +16,7 @@ async function audioCommandsBot(sock, { messages }) {
     if (textMessage.startsWith('!play ')) {
         const audioPath = path.join(__dirname, 'temp_audio.webm');
         const outputPath = path.join(__dirname, 'temp_audio.mp3');
-        
+
         try {
             const query = textMessage.replace('!play ', '').trim();
             if (!query) {
