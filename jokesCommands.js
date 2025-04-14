@@ -256,7 +256,7 @@ async function jokesCommandsBot(sock, { messages }) {
 
         if (text && text.length > 0) {
             const mediaPath = path.join(
-                'assests',
+                'assets',
                 'MarioFazOL.mp4'
             );
 
