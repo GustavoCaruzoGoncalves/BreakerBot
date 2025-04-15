@@ -34,9 +34,9 @@ async function jokesCommandsBot(sock, { messages }) {
                     text: replyText,
                     mentions: [sender],
                 }, { quoted: msg });
-            } else if (nameArgument) {
+            } else if (nameArgument ==! "eu" || nameArgument ==! "me" || nameArgument ==! "eu me" || nameArgument ==! "me eu") {
                 const percentage = Math.floor(Math.random() * 101);
-                const replyText = `${nameArgument} você é ${percentage}% gay! 🏳‍🌈🏳‍🌈🏳‍🌈`;
+                const replyText = `${nameArgument} é ${percentage}% gay! 🏳‍🌈🏳‍🌈🏳‍🌈`;
 
                 await sock.sendMessage(sender, {
                     text: replyText,
@@ -74,9 +74,9 @@ async function jokesCommandsBot(sock, { messages }) {
                     text: replyText,
                     mentions: [sender],
                 }, { quoted: msg });
-            } else if (nameArgument) {
+            } else if (nameArgument ==! "eu" || nameArgument ==! "me" || nameArgument ==! "eu me" || nameArgument ==! "me eu") {
                 const percentage = Math.floor(Math.random() * 101);
-                const replyText = `${nameArgument} você é ${percentage}% corno! 🐂🐂🐂`;
+                const replyText = `${nameArgument} é ${percentage}% corno! 🐂🐂🐂`;
 
                 await sock.sendMessage(sender, {
                     text: replyText,
