@@ -104,6 +104,22 @@ async function jokesCommandsBot(sock, { messages }) {
             customText: "bolsonarista"
         });
     }
+
+    if (textMessage.startsWith("!fazol") || textMessage.startsWith("!FAZOL")) {
+        const videoPath = path.resolve(__dirname, 'assets', 'MarioFazOL.mp4');
+
+        if (fs.existsSync(videoPath)) {
+            await sock.sendMessage(sender, {
+                video: fs.readFileSync(videoPath),
+                caption: "FAZ O L CARALHOOOOOOOOOO",
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(sender, {
+                text: "O vídeo do FAZOL não foi encontrado 😢",
+            }, { quoted: msg });
+        }
+    }
+
 }
 
 module.exports = jokesCommandsBot;
