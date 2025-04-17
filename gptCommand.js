@@ -119,42 +119,42 @@ async function gptCommandBot(sock, { messages }) {
         await sock.sendMessage(chatId, { text: response });
     }
 
-    if (text.startsWith("!dalle")) {
-    const promptOriginal = text.replace("!dalle", "").trim();
-    if (!promptOriginal) {
-        await sock.sendMessage(chatId, { text: "❌ Envie um prompt junto com o comando `!dalle` para gerar uma imagem." });
-        return;
-    }
-
-    try {
-        const apiKey = process.env.OPENAI_API_KEY;
-
-        const dalleResponse = await axios.post(
-            "https://api.openai.com/v1/images/generations",
-            {
-                model: "dall-e-3",
-                prompt: promptOriginal,
-                n: 1,
-                size: "1024x1792"
-            },
-            {
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    "Content-Type": "application/json"
-                }
-            }
-        );
-
-        const imageUrl = dalleResponse.data.data[0].url;
-        await sock.sendMessage(chatId, {
-            image: { url: imageUrl },
-            caption: `🧠 Imagem gerada para o prompt:\n"${promptOriginal}"`
-        });
-    } catch (error) {
-        console.error("Erro DALL·E:", error?.response?.data || error);
-        await sock.sendMessage(chatId, { text: "❌ Erro ao gerar imagem com DALL·E." });
-    }
-}
+//    if (text.startsWith("!dalle")) {
+//    const promptOriginal = text.replace("!dalle", "").trim();
+//    if (!promptOriginal) {
+//        await sock.sendMessage(chatId, { text: "❌ Envie um prompt junto com o comando `!dalle` para gerar uma imagem." });
+//        return;
+//    }
+//
+//    try {
+//        const apiKey = process.env.OPENAI_API_KEY;
+//
+//        const dalleResponse = await axios.post(
+//            "https://api.openai.com/v1/images/generations",
+//            {
+//                model: "dall-e-3",
+//                prompt: promptOriginal,
+//                n: 1,
+//                size: "1024x1792"
+//            },
+//            {
+//                headers: {
+//                    Authorization: `Bearer ${apiKey}`,
+//                    "Content-Type": "application/json"
+//                }
+//            }
+//        );
+//
+//        const imageUrl = dalleResponse.data.data[0].url;
+//        await sock.sendMessage(chatId, {
+//            image: { url: imageUrl },
+//            caption: `🧠 Imagem gerada para o prompt:\n"${promptOriginal}"`
+//        });
+//    } catch (error) {
+//        console.error("Erro DALL·E:", error?.response?.data || error);
+//        await sock.sendMessage(chatId, { text: "❌ Erro ao gerar imagem com DALL·E." });
+//    }
+//}
 
 
 async function askChatGPT3(prompt) {
