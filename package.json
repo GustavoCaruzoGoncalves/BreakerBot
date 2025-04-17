@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "server": "pm2 start index.js --name BreakerBot",
-    "stop": "pm2 stop BreakerBot"
+    "stop": "pm2 stop BreakerBot",
+    "restart": "npm stop && npm run server"
   },
   "keywords": [],
   "author": "",
