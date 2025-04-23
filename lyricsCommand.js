@@ -83,7 +83,7 @@ async function lyricsCommandsBot(sock, { messages }) {
       const letraFormatada = formatarLetraTextoCru(lyrics);
 
       await sock.sendMessage(sender, {
-        text: `🎵 *${musicaSelecionada.title}* - ${musicaSelecionada.primary_artist.name}\n\n*Versão Com Formatação:*\n\n${letraFormatada}`,
+        text: `🎵 *${musicaSelecionada.title}* - ${musicaSelecionada.primary_artist.name}\n\n${letraFormatada}`,
       }, { quoted: msg });
 
     } catch (error) {
