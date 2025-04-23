@@ -31,12 +31,14 @@ async function menuCommandBot(sock, { messages }) {
 ✅ *!bolsonarista* - Calcula a % de bolsonarista da pessoa.
 ✅ *!fazol* ou *!FAZOL* - FAZ O L CARALHOOOOOOOOOO.
 
-🤖 *IA e Bots:*
+🤖 *IA, Bots e APIs:*
 ✅ *!gpt3* - Fale com o Chat GPT-3 sem contexto (respostas únicas).
 ✅ *!gpt4* - Fale com o Chat GPT-4 com contexto (ele lembra o que foi dito) ou use o comando marcando uma imagem para ele fazer uma análise.
 ✅ *!grok* - Fale com o Grok.
 ✅ *!grokangry* - Fale com o Grok sendo rude.
 ✅ *!grokimg* - Gere imagens com o Grok.
+✅ *!lyrics "Cantor" "Música" * - Pesquisa músicas.
+✅ *!lyrics escolha (numero) * - Retorna a letra da música escolhida.
 
 🎮 *Jogos:*
 ✅ *!trivia* - Brinque de acertar respostas. Use *!trivia start* para começar e *!trivia resposta <sua resposta>* para responder.
