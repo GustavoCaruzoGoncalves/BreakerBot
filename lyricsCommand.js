@@ -1,7 +1,8 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+require("dotenv").config();
 
-const API_KEY = 'REMOVED';
+const API_KEY = process.env.GENIUS_API_KEY;
 const searchResults = new Map();
 
 function formatarLetraTextoCru(texto) {

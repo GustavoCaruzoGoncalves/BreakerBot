@@ -37,8 +37,8 @@ async function menuCommandBot(sock, { messages }) {
 ✅ *!grok* - Fale com o Grok.
 ✅ *!grokangry* - Fale com o Grok sendo rude.
 ✅ *!grokimg* - Gere imagens com o Grok.
-✅ *!lyrics "Cantor" "Música" * - Pesquisa músicas.
-✅ *!lyrics escolha (numero) * - Retorna a letra da música escolhida.
+✅ *!lyrics* "Cantor" "Música" - Pesquisa músicas.
+✅ *!lyrics* escolha (numero) - Retorna a letra da música escolhida.
 
 🎮 *Jogos:*
 ✅ *!trivia* - Brinque de acertar respostas. Use *!trivia start* para começar e *!trivia resposta <sua resposta>* para responder.
