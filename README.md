@@ -24,11 +24,13 @@ Ensure that you have the following installed on your system:
 git clone https://github.com/GustavoCaruzoGoncalves/BreakerBot.git
 cd BreakerBot
 ```
-#### **2. Install NodeJS Dependencies**  
+#### **2. Run the Setup Script**
 ```sh
-npm install
+./setup.sh
 ```
-#### **3. Run the Bot to authenticate**  
+This script installs the project dependencies, sets up **pm2** and generates a `.env` file.
+Edit `.env` with your API keys and the admin phone numbers before starting the bot.
+#### **3. Run the Bot to authenticate**
 ```sh
 npm start
 ```
