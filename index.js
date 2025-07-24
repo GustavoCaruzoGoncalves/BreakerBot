@@ -30,26 +30,34 @@ async function connectBot() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
-        const sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: true
-        });
+        const sock = makeWASocket({ auth: state });
 
         sock.ev.on('creds.update', saveCreds);
 
-        sock.ev.on('connection.update', (update) => {
+        sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
+        
             if (qr) {
                 console.log("Escaneie o QR Code para conectar:");
+                qrcode.generate(qr, { small: true });
             }
+        
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 401;
-                console.log("Conexão fechada, tentando reconectar:", shouldReconnect);
-                if (shouldReconnect) connectBot();
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const isStreamError = lastDisconnect?.error?.message?.includes('Stream Errored');
+        
+                const shouldReconnect = statusCode !== 401 || isStreamError;
+                console.log("Conexão fechada. Código:", statusCode, "| Stream error:", isStreamError);
+                if (shouldReconnect) {
+                    console.log("Tentando reconectar...");
+                    connectBot();
+                } else {
+                    console.log("Sessão inválida. Delete a pasta auth_info e reconecte via QR Code.");
+                }
             } else if (connection === 'open') {
-                console.log("Bot conectado com sucesso!");
+                console.log("✅ Bot conectado com sucesso!");
             }
-        });
+        });        
 
         sock.ev.on('messages.upsert', async (messages) => {
             try {
