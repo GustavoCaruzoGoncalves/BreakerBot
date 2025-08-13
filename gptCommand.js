@@ -34,7 +34,7 @@ async function gptCommandBot(sock, { messages }) {
         }
     }
 
-    if (text.startsWith("!reset")) {
+    if (text.startsWith("!resetGpt")) {
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Você não tem permissão para usar esse comando. Somente administradores podem usar `!reset`."
