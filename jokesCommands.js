@@ -17,14 +17,43 @@ async function jokesCommandsBot(sock, { messages }) {
         return ["eu", "me", "eu me", "me eu"].includes(name);
     }
 
+    function isPedraoVariation(name) {
+        const pedraoVariations = ["pedrão", "pedrao", "perdão", "perdao", "pedrao", "pedrão"];
+        return pedraoVariations.some(variation => 
+            name.toLowerCase().includes(variation.toLowerCase())
+        );
+    }
+
+    const pedraoNumber = process.env.PEDRAO_NUMBER;
+
+    function isPedraoNumber(jid) {
+        return jid === pedraoNumber + "@s.whatsapp.net";
+    }
+
     async function handleCommand({ command, emoji, customText }) {
         console.log(`[DEBUG] Comando ${command} detectado`);
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
 
         if (mentionedJid && mentionedJid.length > 0) {
             const userToMention = mentionedJid[0];
-            const percentage = getRandomPercentage();
-            const replyText = `@${userToMention.split('@')[0]} é ${percentage}% ${customText}! ${emoji}`;
+            let percentage = getRandomPercentage();
+            let replyText;
+            
+            if (isPedraoNumber(userToMention) && textMessage.startsWith("!leitada")) {
+                percentage = 100;
+                replyText = `@${userToMention.split('@')[0]} levou ${percentage}% ${customText}! ${emoji} KKKKKKKKKKK`;
+                
+                const stickerPath = path.resolve(__dirname, 'assets', 'pedrao_sticker.webp');
+                if (fs.existsSync(stickerPath)) {
+                    await sock.sendMessage(sender, {
+                        sticker: fs.readFileSync(stickerPath),
+                    }, { quoted: msg });
+                }
+            } else if (textMessage.startsWith("!leitada")){
+                replyText = `@${userToMention.split('@')[0]} levou ${percentage}% ${customText}! ${emoji}`;
+            } else {
+                replyText = `@${userToMention.split('@')[0]} é ${percentage}% ${customText}! ${emoji}`;
+            }
 
             await sock.sendMessage(sender, {
                 text: replyText,
@@ -35,16 +64,37 @@ async function jokesCommandsBot(sock, { messages }) {
 
 
             if (isSelfReference(nameArgument)) {
-                const percentage = getRandomPercentage();
-                const replyText = `Você é ${percentage}% ${customText}! ${emoji}`;
+                let percentage = getRandomPercentage();
+                let replyText;
+                if (textMessage.startsWith("!leitada")){
+                    replyText = `Você levou ${percentage}% ${customText}! ${emoji}`;
+                } else {
+                    replyText = `Você é ${percentage}% ${customText}! ${emoji}`;
+                }
 
                 await sock.sendMessage(sender, {
                     text: replyText,
                     mentions: [sender],
                 }, { quoted: msg });
             } else if (nameArgument) {
-                const percentage = getRandomPercentage();
-                const replyText = `${nameArgument} é ${percentage}% ${customText}! ${emoji}`;
+                let percentage = getRandomPercentage();
+                let replyText;
+                
+                if (isPedraoVariation(nameArgument) && textMessage.startsWith("!leitada")) {
+                    percentage = 100;
+                    replyText = `${nameArgument} levou ${percentage}% ${customText}! ${emoji} KKKKKKKKKKK`;
+                    
+                    const stickerPath = path.resolve(__dirname, 'assets', 'pedrao_sticker.webp');
+                    if (fs.existsSync(stickerPath)) {
+                        await sock.sendMessage(sender, {
+                            sticker: fs.readFileSync(stickerPath),
+                        }, { quoted: msg });
+                    }
+                } else if (textMessage.startsWith("!leitada")){
+                    replyText = `${nameArgument} levou ${percentage}% ${customText}! ${emoji}`;
+                } else {
+                    replyText = `${nameArgument} é ${percentage}% ${customText}! ${emoji}`;
+                }
 
                 await sock.sendMessage(sender, {
                     text: replyText,
@@ -103,6 +153,53 @@ async function jokesCommandsBot(sock, { messages }) {
             emoji: "🇧🇷🇧🇷🇧🇷",
             customText: "bolsonarista"
         });
+    }
+
+    if (textMessage.startsWith("!leitada")) {
+        await handleCommand({
+            command: "!leitada",
+            emoji: "🥛🥛🥛",
+            customText: "de leitada"
+        });
+    }
+
+    function checkCumprimentoPedrao() {
+        const cumprimentos = ["bom dia", "boa tarde", "boa noite"];
+        const variacoesPedrao = ["perdao", "perdão", "pedrão", "pedrao"];
+        
+        const textoLower = textMessage.toLowerCase();
+        
+        for (const cumprimento of cumprimentos) {
+            for (const variacao of variacoesPedrao) {
+                const patterns = [
+                    `${cumprimento} ${variacao}`,
+                    `${cumprimento}, ${variacao}`,
+                    `${cumprimento} ${variacao}!`,
+                    `${cumprimento}, ${variacao}!`
+                ];
+                
+                for (const pattern of patterns) {
+                    if (textoLower.startsWith(pattern)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    if (checkCumprimentoPedrao()) {
+        const stickerPath = path.resolve(__dirname, 'assets', 'pedrao_sticker.webp');
+        
+        if (fs.existsSync(stickerPath)) {
+            await sock.sendMessage(sender, {
+                sticker: fs.readFileSync(stickerPath),
+            }, { quoted: msg });
+        }
+        
+        await sock.sendMessage(sender, {
+            text: "O PERDÃO JÁ LEVOU 100% DA LEITADA KKKKKKKKKKKKKKKKK",
+        }, { quoted: msg });
     }
 
     if (textMessage.startsWith("!fazol") || textMessage.startsWith("!FAZOL")) {
@@ -179,6 +276,7 @@ async function jokesCommandsBot(sock, { messages }) {
             }
         }
     }
+
 }
 
 module.exports = jokesCommandsBot;
