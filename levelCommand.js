@@ -249,19 +249,19 @@ async function levelCommandBot(sock, { messages }) {
     const excludedCommands = ['!menu', '!help', '!ajuda'];
     const isExcludedCommand = excludedCommands.some(cmd => textMessage.toLowerCase().startsWith(cmd.toLowerCase()));
 
-        if (textMessage && textMessage.trim().length > 0 && !isExcludedCommand) {
-            console.log(`[DEBUG] Processando mensagem de ${sender}: "${textMessage}"`);
-            const isDailyBonus = levelSystem.checkDailyBonus(sender);
-            console.log(`[DEBUG] Bônus diário: ${isDailyBonus}`);
-            
-            let xpToGive = 10;
-            if (isDailyBonus) {
-                xpToGive = 60;
-                console.log(`[DEBUG] Aplicando bônus diário: 10 + 50 = 60 XP`);
-            }
-            
-            const xpResult = levelSystem.addXP(sender, xpToGive, isDailyBonus);
-            console.log(`[DEBUG] Resultado XP:`, xpResult);
+    if (textMessage && textMessage.trim().length > 0) {
+        console.log(`[DEBUG] Processando mensagem de ${sender}: "${textMessage}"`);
+        const isDailyBonus = levelSystem.checkDailyBonus(sender);
+        console.log(`[DEBUG] Bônus diário: ${isDailyBonus}`);
+        
+        let xpToGive = 10;
+        if (isDailyBonus) {
+            xpToGive = 60;
+            console.log(`[DEBUG] Aplicando bônus diário: 10 + 50 = 60 XP`);
+        }
+        
+        const xpResult = levelSystem.addXP(sender, xpToGive, isDailyBonus);
+        console.log(`[DEBUG] Resultado XP:`, xpResult);
         
         if (xpResult.isLevelUp) {
             const userInfo = levelSystem.getUserInfo(sender);
@@ -306,6 +306,11 @@ async function levelCommandBot(sock, { messages }) {
                 });
             }
         }
+    }
+
+    if (isExcludedCommand) {
+        console.log(`[DEBUG] Comando excluído detectado: ${textMessage}`);
+        return;
     }
 
     if (textMessage.startsWith("!me")) {
