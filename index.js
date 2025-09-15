@@ -12,6 +12,7 @@ const banCommandBot = require('./banCommand');
 const lyricsCommandBot = require('./lyricsCommand')
 const zhipuCommandsBot = require('./zhipuCommands');
 const sendJsCommandBot = require('./sendJsCommand');
+const levelCommandBot = require('./levelCommand');
 
 const logError = (error) => {
     const errorMsg = `[${new Date().toISOString()}] ${error.stack || error.message || error}\n`;
@@ -74,6 +75,7 @@ async function connectBot() {
 		        await banCommandBot(sock, messages);
 		        await zhipuCommandsBot(sock, messages);
 		        await sendJsCommandBot(sock, messages);
+		        await levelCommandBot(sock, messages);
             } catch (err) {
                 console.error('Erro ao processar mensagem:', err);
                 logError(err);

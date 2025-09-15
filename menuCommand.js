@@ -8,7 +8,7 @@ async function menuCommandBot(sock, { messages }) {
 
     console.log(`[DEBUG] Mensagem recebida de ${sender}: ${textMessage}`);
 
-    if (textMessage.toLowerCase().startsWith("!menu")) {
+    if (textMessage.toLowerCase().startsWith("!menu") || textMessage.toLowerCase().startsWith("!ajuda") || textMessage.toLowerCase().startsWith("!help") || textMessage.toLowerCase().startsWith("!sobre")) {
         console.log("[DEBUG] Enviando menu de comandos...");
         const menuText = `📌 *Menu de Comandos:*
 
@@ -29,6 +29,7 @@ async function menuCommandBot(sock, { messages }) {
 ✅ *!chato* - Calcula a % de chato da pessoa.
 ✅ *!petista* - Calcula a % de petista da pessoa.
 ✅ *!bolsonarista* - Calcula a % de bolsonarista da pessoa.
+✅ *!leitada* - Calcula a % de leitada que a pessoa levou.
 ✅ *!fazol* ou *!FAZOL* - FAZ O L CARALHOOOOOOOOOO.
 
 🤖 *IA, Bots e APIs:*
@@ -42,6 +43,13 @@ async function menuCommandBot(sock, { messages }) {
 
 🎮 *Jogos:*
 ✅ *!trivia* - Brinque de acertar respostas. Use *!trivia start* para começar e *!trivia resposta <sua resposta>* para responder.
+
+🎯 *Sistema de Níveis:*
+✅ *!niveis* - Explica como funciona o sistema de níveis.
+✅ *!me* - Mostra seu status atual (nível, XP, elo, prestígio).
+✅ *!elos* - Lista todos os elos disponíveis.
+✅ *!prestigio* - Faz prestígio (nível 10+).
+✅ *!ranking* - Mostra o top 10 usuários.
 `;
 
         await sock.sendMessage(sender, { text: menuText }, { quoted: msg });
