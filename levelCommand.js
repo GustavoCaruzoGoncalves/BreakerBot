@@ -349,6 +349,7 @@ class LevelSystem {
         const oldLevel = user.level;
         const oldXP = user.xp;
         const oldPrestigeAvailable = user.prestigeAvailable;
+        const oldPrestige = user.prestige;
         
         if (!user.levelHistory) {
             user.levelHistory = [];
@@ -359,6 +360,7 @@ class LevelSystem {
             oldLevel: oldLevel,
             oldXP: oldXP,
             oldPrestigeAvailable: oldPrestigeAvailable,
+            oldPrestige: oldPrestige,
             newLevel: targetLevel,
             newXP: totalXPNeeded,
             action: 'setlevel'
@@ -407,12 +409,18 @@ class LevelSystem {
         const currentLevel = user.level;
         const currentXP = user.xp;
         const currentPrestigeAvailable = user.prestigeAvailable;
+        const currentPrestige = user.prestige;
+        console.log(`[DEBUG] currentPrestigeAvailable: ${currentPrestigeAvailable}`);
+        console.log(`[DEBUG] currentPrestige: ${currentPrestige}`);
+        console.log(`[DEBUG] lastSetLevel.oldPrestigeAvailable: ${lastSetLevel.oldPrestigeAvailable}`);
+        console.log(`[DEBUG] lastSetLevel.oldPrestige: ${lastSetLevel.oldPrestige}`);
         
         user.level = lastSetLevel.oldLevel;
         user.xp = lastSetLevel.oldXP;
         user.prestigeAvailable = lastSetLevel.oldPrestigeAvailable || 0;
+        user.prestige = lastSetLevel.oldPrestige || 0;
         
-        this.updatePrestigeAvailable(userId);
+        console.log(`[DEBUG] Após reset - Nível: ${user.level}, XP: ${user.xp}, Prestígios disponíveis: ${user.prestigeAvailable}, Prestígios usados: ${user.prestige}`);
         
         const lastIndex = user.levelHistory.findLastIndex(entry => entry.action === 'setlevel');
         if (lastIndex !== -1) {
@@ -425,13 +433,15 @@ class LevelSystem {
         
         return {
             success: true,
-            message: `🔄 Nível revertido com sucesso!\n📊 ${currentLevel} → ${lastSetLevel.oldLevel}\n⭐ XP: ${currentXP} → ${lastSetLevel.oldXP}\n💎 Prestígios disponíveis: ${currentPrestigeAvailable} → ${user.prestigeAvailable}`,
+            message: `🔄 Nível revertido com sucesso!\n📊 ${currentLevel} → ${lastSetLevel.oldLevel}\n⭐ XP: ${currentXP} → ${lastSetLevel.oldXP}\n💎 Prestígios disponíveis: ${currentPrestigeAvailable} → ${user.prestigeAvailable}\n🏆 Prestígios usados: ${currentPrestige} → ${user.prestige}`,
             oldLevel: currentLevel,
             newLevel: lastSetLevel.oldLevel,
             oldXP: currentXP,
             newXP: lastSetLevel.oldXP,
             oldPrestigeAvailable: currentPrestigeAvailable,
-            newPrestigeAvailable: user.prestigeAvailable
+            newPrestigeAvailable: user.prestigeAvailable,
+            oldPrestige: currentPrestige,
+            newPrestige: user.prestige
         };
     }
 
