@@ -627,7 +627,7 @@ async function levelCommandBot(sock, { messages }) {
         const parts = textMessage.split(' ');
         if (parts.length < 3) {
             await sock.sendMessage(chatId, {
-                text: "📝 *Uso:* !setlevel @usuario nivel\n\n*Exemplo:* !setlevel @usuario 50"
+                text: "📝 *Uso:* !setlevel @usuario nivel\n📝 *Uso:* !setlevel me nivel\n\n*Exemplos:*\n• !setlevel @usuario 50\n• !setlevel me 25"
             }, { quoted: msg });
             return;
         }
@@ -643,7 +643,9 @@ async function levelCommandBot(sock, { messages }) {
         }
 
         let targetUserId;
-        if (targetUser.startsWith('@')) {
+        if (targetUser.toLowerCase() === 'me') {
+            targetUserId = sender;
+        } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentions.length > 0) {
                 targetUserId = mentions[0];
@@ -654,7 +656,10 @@ async function levelCommandBot(sock, { messages }) {
                 return;
             }
         } else {
-            targetUserId = sender;
+            await sock.sendMessage(chatId, {
+                text: "❌ Use '@usuario' para mencionar alguém ou 'me' para você mesmo!"
+            }, { quoted: msg });
+            return;
         }
 
         const result = levelSystem.setLevel(targetUserId, targetLevel);
@@ -682,7 +687,7 @@ async function levelCommandBot(sock, { messages }) {
         const parts = textMessage.split(' ');
         if (parts.length < 2) {
             await sock.sendMessage(chatId, {
-                text: "📝 *Uso:* !resetSetLevel @usuario\n\n*Exemplo:* !resetSetLevel @usuario"
+                text: "📝 *Uso:* !resetSetLevel @usuario\n📝 *Uso:* !resetSetLevel me\n\n*Exemplos:*\n• !resetSetLevel @usuario\n• !resetSetLevel me"
             }, { quoted: msg });
             return;
         }
@@ -690,7 +695,9 @@ async function levelCommandBot(sock, { messages }) {
         const targetUser = parts[1];
         let targetUserId;
 
-        if (targetUser.startsWith('@')) {
+        if (targetUser.toLowerCase() === 'me') {
+            targetUserId = sender;
+        } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentions.length > 0) {
                 targetUserId = mentions[0];
@@ -702,7 +709,7 @@ async function levelCommandBot(sock, { messages }) {
             }
         } else {
             await sock.sendMessage(chatId, {
-                text: "❌ Você deve mencionar um usuário! Use: !resetSetLevel @usuario"
+                text: "❌ Use '@usuario' para mencionar alguém ou 'me' para você mesmo!"
             }, { quoted: msg });
             return;
         }
