@@ -206,6 +206,48 @@ class LevelSystem {
         };
     }
 
+    prestigioAll(userId) {
+        this.initUser(userId);
+        const user = this.usersData[userId];
+        
+        this.updatePrestigeAvailable(userId);
+        
+        if (user.level < 10) {
+            return { success: false, message: "Você precisa estar no nível 10 ou superior para fazer prestígio!" };
+        }
+        
+        if (user.prestigeAvailable <= 0) {
+            return { success: false, message: `Você não tem prestígios disponíveis! Você tem ${user.prestige} prestígios usados e pode ter até ${this.calculateAvailablePrestiges(user.level)} prestígios no nível ${user.level}.` };
+        }
+        
+        const oldPrestige = user.prestige;
+        const prestigiosUsados = user.prestigeAvailable;
+        const badgesAdicionados = [];
+        
+        for (let i = 0; i < prestigiosUsados; i++) {
+            const prestigeBadge = `🏆 Prestígio ${user.prestige + 1}`;
+            if (!user.badges.includes(prestigeBadge)) {
+                user.badges.push(prestigeBadge);
+                badgesAdicionados.push(prestigeBadge);
+            }
+            user.prestige++;
+        }
+        
+        user.prestigeAvailable = 0;
+        
+        this.saveUsersData();
+        
+        return {
+            success: true,
+            message: `🎉 Todos os prestígios realizados! Você agora é Prestígio ${user.prestige}! 🎉\n📊 Prestígios usados: ${prestigiosUsados}\n🏆 Badges adicionados: ${badgesAdicionados.join(', ')}\n💎 Prestígios restantes: ${user.prestigeAvailable}`,
+            newPrestige: user.prestige,
+            oldPrestige: oldPrestige,
+            prestigiosUsados: prestigiosUsados,
+            badgesAdicionados: badgesAdicionados,
+            prestigeAvailable: user.prestigeAvailable
+        };
+    }
+
     getUserInfo(userId) {
         this.initUser(userId);
         const user = this.usersData[userId];
@@ -592,6 +634,22 @@ async function levelCommandBot(sock, { messages }) {
         }
     }
 
+    if (textMessage.startsWith("!prestigioAll")) {
+        const prestigeAllResult = levelSystem.prestigioAll(sender);
+        
+        if (prestigeAllResult.success) {
+            await sock.sendMessage(chatId, {
+                text: prestigeAllResult.message,
+                mentions: [sender]
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(chatId, {
+                text: prestigeAllResult.message,
+                mentions: [sender]
+            }, { quoted: msg });
+        }
+    }
+
     if (textMessage.startsWith("!ranking")) {
         const ranking = levelSystem.getRanking(10);
         
@@ -642,6 +700,7 @@ async function levelCommandBot(sock, { messages }) {
         niveisMessage += `• !info @usuario - Informações de outro usuário\n`;
         niveisMessage += `• !elos - Lista todos os elos\n`;
         niveisMessage += `• !prestigio - Faz prestígio\n`;
+        niveisMessage += `• !prestigioAll - Usa todos os prestígios disponíveis\n`;
         niveisMessage += `• !ranking - Top 10 usuários\n`;
         niveisMessage += `• !niveis - Esta explicação\n\n`;
         
