@@ -70,6 +70,7 @@ class LevelSystem {
                 xp: 0,
                 level: 1,
                 prestige: 0,
+                prestigeAvailable: 0,
                 totalMessages: 0,
                 lastMessageTime: null,
                 badges: [],
@@ -118,6 +119,10 @@ class LevelSystem {
         const newLevel = this.calculateLevel(user.xp);
         user.level = newLevel;
         
+        if (newLevel > oldLevel) {
+            this.updatePrestigeAvailable(userId);
+        }
+        
         console.log(`[DEBUG] Usuário ${userId}: ${oldLevel} -> ${newLevel}, XP: ${user.xp}`);
         this.saveUsersData();
         
@@ -161,22 +166,22 @@ class LevelSystem {
         this.initUser(userId);
         const user = this.usersData[userId];
         
-        return user.level >= 10 && 
-               user.level % 10 === 0 && 
-               user.lastPrestigeLevel < user.level;
+        this.updatePrestigeAvailable(userId);
+        
+        return user.level >= 10 && user.prestigeAvailable > 0;
     }
 
     prestige(userId) {
         this.initUser(userId);
         const user = this.usersData[userId];
         
+        this.updatePrestigeAvailable(userId);
+        
         if (!this.canPrestige(userId)) {
             if (user.level < 10) {
                 return { success: false, message: "Você precisa estar no nível 10 ou superior para fazer prestígio!" };
-            } else if (user.level % 10 !== 0) {
-                return { success: false, message: "Você só pode fazer prestígio em níveis múltiplos de 10 (10, 20, 30, etc.)!" };
-            } else if (user.lastPrestigeLevel >= user.level) {
-                return { success: false, message: `Você já fez prestígio no nível ${user.level}! Aguarde o próximo nível múltiplo de 10.` };
+            } else if (user.prestigeAvailable <= 0) {
+                return { success: false, message: `Você não tem prestígios disponíveis! Você tem ${user.prestige} prestígios usados e pode ter até ${this.calculateAvailablePrestiges(user.level)} prestígios no nível ${user.level}.` };
             }
         }
         
@@ -187,15 +192,16 @@ class LevelSystem {
         
         const oldPrestige = user.prestige;
         user.prestige++;
-        user.lastPrestigeLevel = user.level;
+        user.prestigeAvailable--;
         
         this.saveUsersData();
         
         return {
             success: true,
-            message: `🎉 Prestígio realizado! Você agora é Prestígio ${user.prestige}! Badge adicionado!`,
+            message: `🎉 Prestígio realizado! Você agora é Prestígio ${user.prestige}! Badge adicionado!\n💎 Prestígios restantes: ${user.prestigeAvailable}`,
             newPrestige: user.prestige,
-            oldPrestige: oldPrestige
+            oldPrestige: oldPrestige,
+            prestigeAvailable: user.prestigeAvailable
         };
     }
 
@@ -203,6 +209,8 @@ class LevelSystem {
         this.initUser(userId);
         const user = this.usersData[userId];
         const currentRank = this.getUserRank(user.level);
+        
+        this.updatePrestigeAvailable(userId);
         
         let totalXPNeeded = 0;
         for (let i = 1; i < user.level; i++) {
@@ -225,6 +233,18 @@ class LevelSystem {
 
     getUserRank(level) {
         return RANKS.find(rank => level >= rank.minLevel && level <= rank.maxLevel) || RANKS[RANKS.length - 1];
+    }
+
+    calculateAvailablePrestiges(level) {
+        return Math.floor(level / 10);
+    }
+
+    updatePrestigeAvailable(userId) {
+        this.initUser(userId);
+        const user = this.usersData[userId];
+        const shouldHave = this.calculateAvailablePrestiges(user.level);
+        const used = user.prestige;
+        user.prestigeAvailable = Math.max(0, shouldHave - used);
     }
 
     getRanking(limit = 10) {
@@ -298,8 +318,9 @@ async function levelCommandBot(sock, { messages }) {
             });
             
             if (xpResult.newLevel >= 10 && xpResult.newLevel % 10 === 0) {
+                const userInfo = levelSystem.getUserInfo(sender);
                 await sock.sendMessage(chatId, {
-                    text: `🏆 @${sender.split('@')[0]} alcançou o nível ${xpResult.newLevel}! Use !prestigio para resgatar seu badge de prestígio! 🏆`,
+                    text: `🏆 @${sender.split('@')[0]} alcançou o nível ${xpResult.newLevel}! Você tem ${userInfo.prestigeAvailable} prestígios disponíveis! Use !prestigio para resgatar! 🏆`,
                     mentions: [sender]
                 });
             }
@@ -337,6 +358,7 @@ async function levelCommandBot(sock, { messages }) {
         meMessage += `📊 Nível: ${userInfo.level}\n`;
         meMessage += `⭐ XP: ${userInfo.xp}\n`;
         meMessage += `🏆 Prestígio: ${userInfo.prestige}\n`;
+        meMessage += `💎 Prestígios disponíveis: ${userInfo.prestigeAvailable}\n`;
         meMessage += `🌟 Elo: ${rank.name}\n`;
         meMessage += `📈 Progresso: ${userInfo.progressXP}/${userInfo.nextLevelXP} XP\n`;
         meMessage += `🎯 XP necessário: ${userInfo.neededXP}\n`;
@@ -417,6 +439,8 @@ async function levelCommandBot(sock, { messages }) {
         
         niveisMessage += `🏆 *Sistema de Prestígio:*\n`;
         niveisMessage += `• Requisito: A cada 10 níveis (10, 20, 30, etc.)\n`;
+        niveisMessage += `• Acumulação: Prestígios se acumulam conforme você progride\n`;
+        niveisMessage += `• Exemplo: Nível 50 = 5 prestígios disponíveis\n`;
         niveisMessage += `• Benefício: +0.5x multiplicador de XP por prestígio\n`;
         niveisMessage += `• Não reseta nível: Continua progredindo normalmente\n`;
         niveisMessage += `• Badges: Ganha emblemas de prestígio únicos\n\n`;
