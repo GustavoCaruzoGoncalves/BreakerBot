@@ -74,7 +74,8 @@ class LevelSystem {
                 totalMessages: 0,
                 lastMessageTime: null,
                 badges: [],
-                lastPrestigeLevel: 0
+                lastPrestigeLevel: 0,
+                levelHistory: []
             };
         }
     }
@@ -267,6 +268,19 @@ class LevelSystem {
         const oldLevel = user.level;
         const oldXP = user.xp;
         
+        user.levelHistory.push({
+            timestamp: new Date().toISOString(),
+            oldLevel: oldLevel,
+            oldXP: oldXP,
+            newLevel: targetLevel,
+            newXP: totalXPNeeded,
+            action: 'setlevel'
+        });
+        
+        if (user.levelHistory.length > 10) {
+            user.levelHistory = user.levelHistory.slice(-10);
+        }
+        
         user.level = targetLevel;
         user.xp = totalXPNeeded;
         
@@ -281,6 +295,44 @@ class LevelSystem {
             newLevel: targetLevel,
             oldXP,
             newXP: totalXPNeeded,
+            prestigeAvailable: user.prestigeAvailable
+        };
+    }
+
+    resetSetLevel(userId) {
+        this.initUser(userId);
+        const user = this.usersData[userId];
+        
+        const setlevelHistory = user.levelHistory.filter(entry => entry.action === 'setlevel');
+        
+        if (setlevelHistory.length === 0) {
+            return { success: false, message: "Nenhuma alteração de nível administrativa encontrada para reverter!" };
+        }
+        
+        const lastSetLevel = setlevelHistory[setlevelHistory.length - 1];
+        
+        const currentLevel = user.level;
+        const currentXP = user.xp;
+        
+        user.level = lastSetLevel.oldLevel;
+        user.xp = lastSetLevel.oldXP;
+        
+        this.updatePrestigeAvailable(userId);
+        
+        const lastIndex = user.levelHistory.findLastIndex(entry => entry.action === 'setlevel');
+        if (lastIndex !== -1) {
+            user.levelHistory.splice(lastIndex, 1);
+        }
+        
+        this.saveUsersData();
+        
+        return {
+            success: true,
+            message: `🔄 Nível revertido com sucesso!\n📊 ${currentLevel} → ${lastSetLevel.oldLevel}\n⭐ XP: ${currentXP} → ${lastSetLevel.oldXP}\n💎 Prestígios disponíveis: ${user.prestigeAvailable}`,
+            oldLevel: currentLevel,
+            newLevel: lastSetLevel.oldLevel,
+            oldXP: currentXP,
+            newXP: lastSetLevel.oldXP,
             prestigeAvailable: user.prestigeAvailable
         };
     }
@@ -413,6 +465,64 @@ async function levelCommandBot(sock, { messages }) {
         }, { quoted: msg });
     }
 
+    if (textMessage.startsWith("!info")) {
+        const parts = textMessage.split(' ');
+        if (parts.length < 2) {
+            await sock.sendMessage(chatId, {
+                text: "📝 *Uso:* !info @usuario\n\n*Exemplo:* !info @usuario"
+            }, { quoted: msg });
+            return;
+        }
+
+        const targetUser = parts[1];
+        let targetUserId;
+
+        if (targetUser.startsWith('@')) {
+            const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            if (mentions.length > 0) {
+                targetUserId = mentions[0];
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Usuário não encontrado na menção!"
+                }, { quoted: msg });
+                return;
+            }
+        } else {
+            await sock.sendMessage(chatId, {
+                text: "❌ Você deve mencionar um usuário! Use: !info @usuario"
+            }, { quoted: msg });
+            return;
+        }
+
+        const userInfo = levelSystem.getUserInfo(targetUserId);
+        const rank = userInfo.rank;
+        
+        let infoMessage = `👤 *Informações do Usuário*\n`;
+        
+        if (admins.admins.includes(targetUserId)) {
+            infoMessage += `👑 ADMINISTRADOR⭐😎\n`;
+        }
+        
+        infoMessage += `📊 Nível: ${userInfo.level}\n`;
+        infoMessage += `⭐ XP: ${userInfo.xp}\n`;
+        infoMessage += `🏆 Prestígio: ${userInfo.prestige}\n`;
+        infoMessage += `💎 Prestígios disponíveis: ${userInfo.prestigeAvailable}\n`;
+        infoMessage += `🌟 Elo: ${rank.name}\n`;
+        infoMessage += `📈 Progresso: ${userInfo.progressXP}/${userInfo.nextLevelXP} XP\n`;
+        infoMessage += `🎯 XP necessário: ${userInfo.neededXP}\n`;
+        infoMessage += `⚡ Multiplicador: ${userInfo.prestigeMultiplier}x\n`;
+        infoMessage += `💬 Mensagens: ${userInfo.totalMessages}\n`;
+        
+        if (userInfo.badges.length > 0) {
+            infoMessage += `🏅 Badges: ${userInfo.badges.join(', ')}\n`;
+        }
+        
+        await sock.sendMessage(chatId, {
+            text: infoMessage,
+            mentions: [targetUserId]
+        }, { quoted: msg });
+    }
+
     if (textMessage.startsWith("!elos")) {
         let elosMessage = `🌟 *Sistema de Elos* 🌟\n\n`;
         
@@ -490,6 +600,7 @@ async function levelCommandBot(sock, { messages }) {
         
         niveisMessage += `💬 *Comandos disponíveis:*\n`;
         niveisMessage += `• !me - Seu status atual\n`;
+        niveisMessage += `• !info @usuario - Informações de outro usuário\n`;
         niveisMessage += `• !elos - Lista todos os elos\n`;
         niveisMessage += `• !prestigio - Faz prestígio\n`;
         niveisMessage += `• !ranking - Top 10 usuários\n`;
@@ -547,6 +658,56 @@ async function levelCommandBot(sock, { messages }) {
         }
 
         const result = levelSystem.setLevel(targetUserId, targetLevel);
+        
+        if (result.success) {
+            await sock.sendMessage(chatId, {
+                text: `🔧 *Comando Administrativo Executado*\n\n${result.message}\n\n👤 Usuário: @${targetUserId.split('@')[0]}\n👑 Executado por: @${sender.split('@')[0]}`,
+                mentions: [targetUserId, sender]
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(chatId, {
+                text: `❌ Erro: ${result.message}`
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage.startsWith("!resetSetLevel")) {
+        if (!admins.admins.includes(sender)) {
+            await sock.sendMessage(chatId, {
+                text: "❌ Acesso negado! Apenas administradores podem usar este comando."
+            }, { quoted: msg });
+            return;
+        }
+
+        const parts = textMessage.split(' ');
+        if (parts.length < 2) {
+            await sock.sendMessage(chatId, {
+                text: "📝 *Uso:* !resetSetLevel @usuario\n\n*Exemplo:* !resetSetLevel @usuario"
+            }, { quoted: msg });
+            return;
+        }
+
+        const targetUser = parts[1];
+        let targetUserId;
+
+        if (targetUser.startsWith('@')) {
+            const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            if (mentions.length > 0) {
+                targetUserId = mentions[0];
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Usuário não encontrado na menção!"
+                }, { quoted: msg });
+                return;
+            }
+        } else {
+            await sock.sendMessage(chatId, {
+                text: "❌ Você deve mencionar um usuário! Use: !resetSetLevel @usuario"
+            }, { quoted: msg });
+            return;
+        }
+
+        const result = levelSystem.resetSetLevel(targetUserId);
         
         if (result.success) {
             await sock.sendMessage(chatId, {
