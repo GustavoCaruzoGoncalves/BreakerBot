@@ -616,7 +616,8 @@ async function levelCommandBot(sock, { messages }) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!setlevel")) {
+    if (textMessage.toLowerCase().startsWith("!setlevel")) {
+        console.log(`[DEBUG] Comando !setlevel detectado: "${textMessage}"`);
         if (!admins.admins.includes(sender)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Acesso negado! Apenas administradores podem usar este comando."
@@ -635,6 +636,8 @@ async function levelCommandBot(sock, { messages }) {
         const targetUser = parts[1];
         const targetLevel = parseInt(parts[2]);
 
+        console.log(`[DEBUG] !setlevel - targetUser: "${targetUser}", targetLevel: ${targetLevel}`);
+
         if (isNaN(targetLevel)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Nível inválido! Use um número válido."
@@ -644,6 +647,7 @@ async function levelCommandBot(sock, { messages }) {
 
         let targetUserId;
         if (targetUser.toLowerCase() === 'me') {
+            console.log(`[DEBUG] !setlevel - Usando "me", targetUserId será: ${sender}`);
             targetUserId = sender;
         } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -676,7 +680,8 @@ async function levelCommandBot(sock, { messages }) {
         }
     }
 
-    if (textMessage.startsWith("!resetSetLevel")) {
+    if (textMessage.toLowerCase().startsWith("!resetsetlevel")) {
+        console.log(`[DEBUG] Comando !resetSetLevel detectado: "${textMessage}"`);
         if (!admins.admins.includes(sender)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Acesso negado! Apenas administradores podem usar este comando."
@@ -695,7 +700,10 @@ async function levelCommandBot(sock, { messages }) {
         const targetUser = parts[1];
         let targetUserId;
 
+        console.log(`[DEBUG] !resetSetLevel - targetUser: "${targetUser}"`);
+
         if (targetUser.toLowerCase() === 'me') {
+            console.log(`[DEBUG] !resetSetLevel - Usando "me", targetUserId será: ${sender}`);
             targetUserId = sender;
         } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
