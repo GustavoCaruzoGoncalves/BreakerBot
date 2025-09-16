@@ -268,6 +268,10 @@ class LevelSystem {
         const oldLevel = user.level;
         const oldXP = user.xp;
         
+        if (!user.levelHistory) {
+            user.levelHistory = [];
+        }
+        
         user.levelHistory.push({
             timestamp: new Date().toISOString(),
             oldLevel: oldLevel,
@@ -302,6 +306,10 @@ class LevelSystem {
     resetSetLevel(userId) {
         this.initUser(userId);
         const user = this.usersData[userId];
+        
+        if (!user.levelHistory) {
+            user.levelHistory = [];
+        }
         
         const setlevelHistory = user.levelHistory.filter(entry => entry.action === 'setlevel');
         
