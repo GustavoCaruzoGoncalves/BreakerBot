@@ -75,7 +75,9 @@ class LevelSystem {
                 lastMessageTime: null,
                 badges: [],
                 lastPrestigeLevel: 0,
-                levelHistory: []
+                levelHistory: [],
+                dailyBonusMultiplier: 0,
+                dailyBonusExpiry: null
             };
         }
     }
@@ -107,10 +109,19 @@ class LevelSystem {
         this.initUser(userId);
         const user = this.usersData[userId];
         
-        const prestigeMultiplier = 1 + (user.prestige * 0.5);
-        const finalXP = Math.floor(xpAmount * prestigeMultiplier);
+        if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < new Date()) {
+            console.log(`[DEBUG] Bônus diário expirou, removendo multiplicador`);
+            user.dailyBonusMultiplier = 0;
+            user.dailyBonusExpiry = null;
+            this.saveUsersData();
+        }
         
-        console.log(`[DEBUG] XP base: ${xpAmount}, multiplicador: ${prestigeMultiplier}, final: ${finalXP}`);
+        const prestigeMultiplier = 1 + (user.prestige * 0.5);
+        const dailyBonusMultiplier = user.dailyBonusMultiplier || 0;
+        const totalMultiplier = prestigeMultiplier + dailyBonusMultiplier;
+        const finalXP = Math.floor(xpAmount * totalMultiplier);
+        
+        console.log(`[DEBUG] XP base: ${xpAmount}, multiplicador prestígio: ${prestigeMultiplier}, multiplicador bônus: ${dailyBonusMultiplier}, total: ${totalMultiplier}, final: ${finalXP}`);
         
         user.xp += finalXP;
         user.totalMessages++;
@@ -132,11 +143,15 @@ class LevelSystem {
             newLevel,
             xpGained: finalXP,
             isLevelUp: newLevel > oldLevel,
-            isDailyBonus
+            isDailyBonus,
+            totalMultiplier,
+            dailyBonusMultiplier
         };
     }
 
     checkDailyBonus(userId) {
+        this.initUser(userId);
+        const user = this.usersData[userId];
         const now = new Date();
         const today = now.toDateString();
         const currentHour = now.getHours();
@@ -144,6 +159,13 @@ class LevelSystem {
         console.log(`[DEBUG] Verificando bônus diário para ${userId}`);
         console.log(`[DEBUG] Hora atual: ${currentHour}, Data: ${today}`);
         console.log(`[DEBUG] Último bônus: ${this.dailyBonus.lastBonusDate}, Usuário: ${this.dailyBonus.lastBonusUser}`);
+        
+        if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < now) {
+            console.log(`[DEBUG] Bônus anterior expirou, removendo multiplicador`);
+            user.dailyBonusMultiplier = 0;
+            user.dailyBonusExpiry = null;
+            this.saveUsersData();
+        }
         
         if (currentHour < 6) {
             console.log(`[DEBUG] Muito cedo para bônus (${currentHour}h)`);
@@ -155,10 +177,15 @@ class LevelSystem {
             return false;
         }
         
-        console.log(`[DEBUG] Aplicando bônus diário para ${userId}`);
+        console.log(`[DEBUG] Aplicando bônus diário de multiplicador para ${userId}`);
         this.dailyBonus.lastBonusDate = today;
         this.dailyBonus.lastBonusUser = userId;
+        
+        user.dailyBonusMultiplier = 1.0;
+        user.dailyBonusExpiry = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
+        
         this.saveDailyBonus();
+        this.saveUsersData();
         
         return true;
     }
@@ -264,13 +291,25 @@ class LevelSystem {
         const progressXP = user.xp - totalXPNeeded;
         const neededXP = Math.max(0, nextLevelXP - progressXP);
         
+        if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < new Date()) {
+            user.dailyBonusMultiplier = 0;
+            user.dailyBonusExpiry = null;
+            this.saveUsersData();
+        }
+        
+        const prestigeMultiplier = 1 + (user.prestige * 0.5);
+        const dailyBonusMultiplier = user.dailyBonusMultiplier || 0;
+        const totalMultiplier = prestigeMultiplier + dailyBonusMultiplier;
+        
         return {
             ...user,
             rank: currentRank,
             progressXP: Math.min(progressXP, nextLevelXP),
             neededXP,
             nextLevelXP,
-            prestigeMultiplier: 1 + (user.prestige * 0.5)
+            prestigeMultiplier,
+            dailyBonusMultiplier,
+            totalMultiplier
         };
     }
 
@@ -309,6 +348,7 @@ class LevelSystem {
         
         const oldLevel = user.level;
         const oldXP = user.xp;
+        const oldPrestigeAvailable = user.prestigeAvailable;
         
         if (!user.levelHistory) {
             user.levelHistory = [];
@@ -318,6 +358,7 @@ class LevelSystem {
             timestamp: new Date().toISOString(),
             oldLevel: oldLevel,
             oldXP: oldXP,
+            oldPrestigeAvailable: oldPrestigeAvailable,
             newLevel: targetLevel,
             newXP: totalXPNeeded,
             action: 'setlevel'
@@ -365,9 +406,11 @@ class LevelSystem {
         
         const currentLevel = user.level;
         const currentXP = user.xp;
+        const currentPrestigeAvailable = user.prestigeAvailable;
         
         user.level = lastSetLevel.oldLevel;
         user.xp = lastSetLevel.oldXP;
+        user.prestigeAvailable = lastSetLevel.oldPrestigeAvailable || 0;
         
         this.updatePrestigeAvailable(userId);
         
@@ -382,12 +425,13 @@ class LevelSystem {
         
         return {
             success: true,
-            message: `🔄 Nível revertido com sucesso!\n📊 ${currentLevel} → ${lastSetLevel.oldLevel}\n⭐ XP: ${currentXP} → ${lastSetLevel.oldXP}\n💎 Prestígios disponíveis: ${user.prestigeAvailable}`,
+            message: `🔄 Nível revertido com sucesso!\n📊 ${currentLevel} → ${lastSetLevel.oldLevel}\n⭐ XP: ${currentXP} → ${lastSetLevel.oldXP}\n💎 Prestígios disponíveis: ${currentPrestigeAvailable} → ${user.prestigeAvailable}`,
             oldLevel: currentLevel,
             newLevel: lastSetLevel.oldLevel,
             oldXP: currentXP,
             newXP: lastSetLevel.oldXP,
-            prestigeAvailable: user.prestigeAvailable
+            oldPrestigeAvailable: currentPrestigeAvailable,
+            newPrestigeAvailable: user.prestigeAvailable
         };
     }
 
@@ -456,12 +500,7 @@ async function levelCommandBot(sock, { messages }) {
         const isDailyBonus = levelSystem.checkDailyBonus(sender);
         console.log(`[DEBUG] Bônus diário: ${isDailyBonus}`);
         
-        let xpToGive = 10;
-        if (isDailyBonus) {
-            xpToGive = 60;
-            console.log(`[DEBUG] Aplicando bônus diário: 10 + 50 = 60 XP`);
-        }
-        
+        const xpToGive = 10;
         const xpResult = levelSystem.addXP(sender, xpToGive, isDailyBonus);
         console.log(`[DEBUG] Resultado XP:`, xpResult);
         
@@ -480,7 +519,9 @@ async function levelCommandBot(sock, { messages }) {
             levelUpMessage += `🏆 Prestígio: ${userInfo.prestige}\n`;
             
             if (xpResult.isDailyBonus) {
-                levelUpMessage += `🌅 Bônus diário: +50 XP!`;
+                levelUpMessage += `🌅 Bônus diário ativado: +1.0x multiplicador por 24h!`;
+            } else if (xpResult.dailyBonusMultiplier > 0) {
+                levelUpMessage += `🌅 Multiplicador bônus ativo: +${xpResult.dailyBonusMultiplier}x`;
             }
             
             await sock.sendMessage(chatId, {
@@ -533,8 +574,18 @@ async function levelCommandBot(sock, { messages }) {
         meMessage += `🌟 Elo: ${rank.name}\n`;
         meMessage += `📈 Progresso: ${userInfo.progressXP}/${userInfo.nextLevelXP} XP\n`;
         meMessage += `🎯 XP necessário: ${userInfo.neededXP}\n`;
-        meMessage += `⚡ Multiplicador: ${userInfo.prestigeMultiplier}x\n`;
-        meMessage += `💬 Mensagens: ${userInfo.totalMessages}\n`;
+        meMessage += `⚡ Multiplicador: ${userInfo.totalMultiplier}x`;
+        
+        if (userInfo.dailyBonusMultiplier > 0) {
+            const expiryTime = new Date(userInfo.dailyBonusExpiry);
+            const hoursLeft = Math.ceil((expiryTime - new Date()) / (1000 * 60 * 60));
+            meMessage += ` (${userInfo.prestigeMultiplier}x prestígio + ${userInfo.dailyBonusMultiplier}x bônus)\n`;
+            meMessage += `🌅 Bônus diário ativo por mais ${hoursLeft}h`;
+        } else {
+            meMessage += ` (${userInfo.prestigeMultiplier}x prestígio)\n`;
+        }
+        
+        meMessage += `\n💬 Mensagens: ${userInfo.totalMessages}\n`;
         
         if (userInfo.badges.length > 0) {
             meMessage += `🏅 Badges: ${userInfo.badges.join(', ')}\n`;
@@ -618,22 +669,6 @@ async function levelCommandBot(sock, { messages }) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!prestigio")) {
-        const prestigeResult = levelSystem.prestige(sender);
-        
-        if (prestigeResult.success) {
-            await sock.sendMessage(chatId, {
-                text: prestigeResult.message,
-                mentions: [sender]
-            }, { quoted: msg });
-        } else {
-            await sock.sendMessage(chatId, {
-                text: prestigeResult.message,
-                mentions: [sender]
-            }, { quoted: msg });
-        }
-    }
-
     if (textMessage.startsWith("!prestigioAll")) {
         const prestigeAllResult = levelSystem.prestigioAll(sender);
         
@@ -645,6 +680,22 @@ async function levelCommandBot(sock, { messages }) {
         } else {
             await sock.sendMessage(chatId, {
                 text: prestigeAllResult.message,
+                mentions: [sender]
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage === "!prestigio" || textMessage.startsWith("!prestigio ")) {
+        const prestigeResult = levelSystem.prestige(sender);
+        
+        if (prestigeResult.success) {
+            await sock.sendMessage(chatId, {
+                text: prestigeResult.message,
+                mentions: [sender]
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(chatId, {
+                text: prestigeResult.message,
                 mentions: [sender]
             }, { quoted: msg });
         }
