@@ -292,6 +292,8 @@ class LevelSystem {
         
         this.saveUsersData();
         
+        this.updateRankingAfterChange(userId);
+        
         return {
             success: true,
             message: `✅ Nível alterado com sucesso!\n📊 ${oldLevel} → ${targetLevel}\n⭐ XP: ${oldXP} → ${totalXPNeeded}\n💎 Prestígios disponíveis: ${user.prestigeAvailable}`,
@@ -334,6 +336,8 @@ class LevelSystem {
         
         this.saveUsersData();
         
+        this.updateRankingAfterChange(userId);
+        
         return {
             success: true,
             message: `🔄 Nível revertido com sucesso!\n📊 ${currentLevel} → ${lastSetLevel.oldLevel}\n⭐ XP: ${currentXP} → ${lastSetLevel.oldXP}\n💎 Prestígios disponíveis: ${user.prestigeAvailable}`,
@@ -346,6 +350,8 @@ class LevelSystem {
     }
 
     getRanking(limit = 10) {
+        console.log(`[DEBUG] Calculando ranking com ${Object.keys(this.usersData).length} usuários`);
+        
         const sortedUsers = Object.entries(this.usersData)
             .sort(([,a], [,b]) => {
                 if (a.prestige !== b.prestige) return b.prestige - a.prestige;
@@ -354,11 +360,36 @@ class LevelSystem {
             })
             .slice(0, limit);
         
+        console.log(`[DEBUG] Top 3 do ranking:`, sortedUsers.slice(0, 3).map(([userId, data]) => ({
+            userId: userId.split('@')[0],
+            level: data.level,
+            xp: data.xp,
+            prestige: data.prestige
+        })));
+        
         return sortedUsers.map(([userId, data]) => ({
             userId,
             ...data,
             rank: this.getUserRank(data.level)
         }));
+    }
+
+    updateRankingAfterChange(userId) {
+        this.updatePrestigeAvailable(userId);
+        
+        this.saveUsersData();
+        
+        const user = this.usersData[userId];
+        console.log(`[DEBUG] Ranking atualizado para ${userId}: Nível ${user.level}, XP ${user.xp}, Prestígio ${user.prestige}`);
+        console.log(`[DEBUG] Dados em memória - Total de usuários: ${Object.keys(this.usersData).length}`);
+        
+        const testRanking = this.getRanking(3);
+        console.log(`[DEBUG] Teste de ranking após mudança:`, testRanking.map(u => ({
+            userId: u.userId.split('@')[0],
+            level: u.level,
+            xp: u.xp,
+            prestige: u.prestige
+        })));
     }
 }
 

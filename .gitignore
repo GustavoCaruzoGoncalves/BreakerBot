@@ -1,5 +1,6 @@
 auth_info
 node_modules/
+levels_info/
 *.mp3
 *.webm
 *.avi
