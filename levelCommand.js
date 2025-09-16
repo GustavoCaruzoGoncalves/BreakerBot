@@ -72,7 +72,8 @@ class LevelSystem {
                 prestige: 0,
                 totalMessages: 0,
                 lastMessageTime: null,
-                badges: []
+                badges: [],
+                lastPrestigeLevel: 0
             };
         }
     }
@@ -159,7 +160,10 @@ class LevelSystem {
     canPrestige(userId) {
         this.initUser(userId);
         const user = this.usersData[userId];
-        return user.level >= 10 && user.level % 10 === 0;
+        
+        return user.level >= 10 && 
+               user.level % 10 === 0 && 
+               user.lastPrestigeLevel < user.level;
     }
 
     prestige(userId) {
@@ -167,7 +171,13 @@ class LevelSystem {
         const user = this.usersData[userId];
         
         if (!this.canPrestige(userId)) {
-            return { success: false, message: "Você só pode fazer prestígio a cada 10 níveis (10, 20, 30, etc.)!" };
+            if (user.level < 10) {
+                return { success: false, message: "Você precisa estar no nível 10 ou superior para fazer prestígio!" };
+            } else if (user.level % 10 !== 0) {
+                return { success: false, message: "Você só pode fazer prestígio em níveis múltiplos de 10 (10, 20, 30, etc.)!" };
+            } else if (user.lastPrestigeLevel >= user.level) {
+                return { success: false, message: `Você já fez prestígio no nível ${user.level}! Aguarde o próximo nível múltiplo de 10.` };
+            }
         }
         
         const prestigeBadge = `🏆 Prestígio ${user.prestige + 1}`;
@@ -177,6 +187,7 @@ class LevelSystem {
         
         const oldPrestige = user.prestige;
         user.prestige++;
+        user.lastPrestigeLevel = user.level;
         
         this.saveUsersData();
         
