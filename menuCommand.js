@@ -16,7 +16,8 @@ async function menuCommandBot(sock, { messages }) {
 ✅ *!menu* - Exibe esta lista de comandos.
 
 🖼️ *Figurinhas e Mídia:*
-✅ *!sticker* - Cria uma figurinha a partir de uma imagem.
+✅ *!sticker* - Cria uma figurinha a partir de uma imagem, vídeo ou GIF.
+✅ *!fsticker* - Cria uma figurinha quadrada (512x512) a partir de uma imagem, vídeo ou GIF.
 ✅ *!toimg* - Converte uma figurinha de volta para imagem PNG.
 ✅ *!play <nome ou link>* - Baixa uma música do YouTube e envia no WhatsApp.
 ✅ *!playmp4 <nome ou link>* - Baixa um vídeo do YouTube e envia no WhatsApp.
