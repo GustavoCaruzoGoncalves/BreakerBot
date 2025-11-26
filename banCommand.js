@@ -5,7 +5,12 @@ async function banCommandBot(sock, { messages }) {
     if (!msg.message || !msg.key.remoteJid.endsWith("@g.us")) return;
 
     const groupId = msg.key.remoteJid;
-    const sender = msg.key.participant || msg.key.remoteJid;
+    
+    // Identificar o usuário corretamente: em grupos usa participantAlt, em privado usa remoteJid
+    const isGroup = msg.key.remoteJid.endsWith('@g.us');
+    const sender = isGroup 
+        ? (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid)
+        : msg.key.remoteJid;
 
     const isAdmin = admins.includes(sender);
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";

@@ -10,7 +10,12 @@ async function zhipuCommandBot(sock, { messages }) {
     if (!msg.message || !msg.key.remoteJid) return;
 
     const chatId = msg.key.remoteJid;
-    const sender = msg.key.participant || msg.key.remoteJid;
+    
+    // Identificar o usuário corretamente: em grupos usa participantAlt, em privado usa remoteJid
+    const isGroup = msg.key.remoteJid.endsWith('@g.us');
+    const sender = isGroup 
+        ? (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid)
+        : msg.key.remoteJid;
 
     const messageType = Object.keys(msg.message)[0];
     const isImageWithCaption = messageType === "imageMessage" && msg.message.imageMessage.caption;

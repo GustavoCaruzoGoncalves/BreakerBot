@@ -64,6 +64,12 @@ async function connectBot() {
 
         sock.ev.on('messages.upsert', async (messages) => {
             try {
+                console.log('\n========== MENSAGEM RECEBIDA ==========');
+                console.log('Timestamp:', new Date().toISOString());
+                console.log('Dados completos da API do Baileys:');
+                console.log(JSON.stringify(messages, null, 2));
+                console.log('========================================\n');
+                
                 await imagesCommandsBot(sock, messages);
                 await audioCommandsBot(sock, messages);
                 await jokesCommandsBot(sock, messages);
