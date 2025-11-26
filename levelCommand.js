@@ -18,55 +18,66 @@ const RANKS = [
 class LevelSystem {
     constructor() {
         this.dataPath = path.join(__dirname, 'levels_info');
-        this.usersData = this.loadUsersData();
-        this.dailyBonus = this.loadDailyBonus();
+        this.ensureDirectory();
     }
 
-    loadUsersData() {
+    ensureDirectory() {
+        if (!fs.existsSync(this.dataPath)) {
+            fs.mkdirSync(this.dataPath, { recursive: true });
+        }
+    }
+
+    readUsersData() {
         try {
             const filePath = path.join(this.dataPath, 'users.json');
             if (fs.existsSync(filePath)) {
-                return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                const data = fs.readFileSync(filePath, 'utf8');
+                return JSON.parse(data);
             }
         } catch (error) {
-            console.error('Erro ao carregar dados dos usuários:', error);
+            console.error('Erro ao ler dados dos usuários:', error);
         }
         return {};
     }
 
-    saveUsersData() {
+    writeUsersData(data) {
         try {
+            this.ensureDirectory();
             const filePath = path.join(this.dataPath, 'users.json');
-            fs.writeFileSync(filePath, JSON.stringify(this.usersData, null, 2));
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
         } catch (error) {
             console.error('Erro ao salvar dados dos usuários:', error);
+            throw error;
         }
     }
 
-    loadDailyBonus() {
+    readDailyBonus() {
         try {
             const filePath = path.join(this.dataPath, 'daily_bonus.json');
             if (fs.existsSync(filePath)) {
-                return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                const data = fs.readFileSync(filePath, 'utf8');
+                return JSON.parse(data);
             }
         } catch (error) {
-            console.error('Erro ao carregar bônus diário:', error);
+            console.error('Erro ao ler bônus diário:', error);
         }
         return { lastBonusDate: null, lastBonusUser: null };
     }
 
-    saveDailyBonus() {
+    writeDailyBonus(data) {
         try {
+            this.ensureDirectory();
             const filePath = path.join(this.dataPath, 'daily_bonus.json');
-            fs.writeFileSync(filePath, JSON.stringify(this.dailyBonus, null, 2));
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
         } catch (error) {
             console.error('Erro ao salvar bônus diário:', error);
+            throw error;
         }
     }
 
-    initUser(userId) {
-        if (!this.usersData[userId]) {
-            this.usersData[userId] = {
+    initUser(usersData, userId) {
+        if (!usersData[userId]) {
+            usersData[userId] = {
                 xp: 0,
                 level: 1,
                 prestige: 0,
@@ -106,14 +117,19 @@ class LevelSystem {
 
     addXP(userId, xpAmount, isDailyBonus = false) {
         console.log(`[DEBUG] addXP chamado para ${userId} com ${xpAmount} XP, bônus: ${isDailyBonus}`);
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         
         if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < new Date()) {
             console.log(`[DEBUG] Bônus diário expirou, removendo multiplicador`);
             user.dailyBonusMultiplier = 0;
             user.dailyBonusExpiry = null;
-            this.saveUsersData();
+            this.writeUsersData(usersData);
+            // Reler após salvar
+            usersData = this.readUsersData();
         }
         
         const prestigeMultiplier = 1 + (user.prestige * 0.5);
@@ -132,11 +148,13 @@ class LevelSystem {
         user.level = newLevel;
         
         if (newLevel > oldLevel) {
-            this.updatePrestigeAvailable(userId);
+            this.updatePrestigeAvailable(usersData, userId);
         }
         
         console.log(`[DEBUG] Usuário ${userId}: ${oldLevel} -> ${newLevel}, XP: ${user.xp}`);
-        this.saveUsersData();
+        
+        // Sempre salvar no arquivo
+        this.writeUsersData(usersData);
         
         return {
             oldLevel,
@@ -150,21 +168,29 @@ class LevelSystem {
     }
 
     checkDailyBonus(userId) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        let user = usersData[userId];
         const now = new Date();
         const today = now.toDateString();
         const currentHour = now.getHours();
         
+        // Sempre ler do arquivo
+        let dailyBonus = this.readDailyBonus();
+        
         console.log(`[DEBUG] Verificando bônus diário para ${userId}`);
         console.log(`[DEBUG] Hora atual: ${currentHour}, Data: ${today}`);
-        console.log(`[DEBUG] Último bônus: ${this.dailyBonus.lastBonusDate}, Usuário: ${this.dailyBonus.lastBonusUser}`);
+        console.log(`[DEBUG] Último bônus: ${dailyBonus.lastBonusDate}, Usuário: ${dailyBonus.lastBonusUser}`);
         
         if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < now) {
             console.log(`[DEBUG] Bônus anterior expirou, removendo multiplicador`);
             user.dailyBonusMultiplier = 0;
             user.dailyBonusExpiry = null;
-            this.saveUsersData();
+            this.writeUsersData(usersData);
+            // Reler após salvar
+            usersData = this.readUsersData();
+            user = usersData[userId];
         }
         
         if (currentHour < 6) {
@@ -172,38 +198,43 @@ class LevelSystem {
             return false;
         }
         
-        if (this.dailyBonus.lastBonusDate === today) {
+        if (dailyBonus.lastBonusDate === today) {
             console.log(`[DEBUG] Bônus já foi dado hoje`);
             return false;
         }
         
         console.log(`[DEBUG] Aplicando bônus diário de multiplicador para ${userId}`);
-        this.dailyBonus.lastBonusDate = today;
-        this.dailyBonus.lastBonusUser = userId;
+        dailyBonus.lastBonusDate = today;
+        dailyBonus.lastBonusUser = userId;
         
         user.dailyBonusMultiplier = 1.0;
         user.dailyBonusExpiry = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
         
-        this.saveDailyBonus();
-        this.saveUsersData();
+        // Sempre salvar no arquivo
+        this.writeDailyBonus(dailyBonus);
+        this.writeUsersData(usersData);
         
         return true;
     }
 
     canPrestige(userId) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        // Sempre ler do arquivo
+        const usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         
-        this.updatePrestigeAvailable(userId);
+        this.updatePrestigeAvailable(usersData, userId);
         
         return user.level >= 10 && user.prestigeAvailable > 0;
     }
 
     prestige(userId) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         
-        this.updatePrestigeAvailable(userId);
+        this.updatePrestigeAvailable(usersData, userId);
         
         if (!this.canPrestige(userId)) {
             if (user.level < 10) {
@@ -222,7 +253,8 @@ class LevelSystem {
         user.prestige++;
         user.prestigeAvailable--;
         
-        this.saveUsersData();
+        // Sempre salvar no arquivo
+        this.writeUsersData(usersData);
         
         return {
             success: true,
@@ -234,10 +266,12 @@ class LevelSystem {
     }
 
     prestigioAll(userId) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         
-        this.updatePrestigeAvailable(userId);
+        this.updatePrestigeAvailable(usersData, userId);
         
         if (user.level < 10) {
             return { success: false, message: "Você precisa estar no nível 10 ou superior para fazer prestígio!" };
@@ -262,7 +296,8 @@ class LevelSystem {
         
         user.prestigeAvailable = 0;
         
-        this.saveUsersData();
+        // Sempre salvar no arquivo
+        this.writeUsersData(usersData);
         
         return {
             success: true,
@@ -276,11 +311,13 @@ class LevelSystem {
     }
 
     getUserInfo(userId) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        let user = usersData[userId];
         const currentRank = this.getUserRank(user.level);
         
-        this.updatePrestigeAvailable(userId);
+        this.updatePrestigeAvailable(usersData, userId);
         
         let totalXPNeeded = 0;
         for (let i = 1; i < user.level; i++) {
@@ -294,7 +331,10 @@ class LevelSystem {
         if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < new Date()) {
             user.dailyBonusMultiplier = 0;
             user.dailyBonusExpiry = null;
-            this.saveUsersData();
+            this.writeUsersData(usersData);
+            // Reler após salvar
+            usersData = this.readUsersData();
+            user = usersData[userId];
         }
         
         const prestigeMultiplier = 1 + (user.prestige * 0.5);
@@ -321,17 +361,19 @@ class LevelSystem {
         return Math.floor(level / 10);
     }
 
-    updatePrestigeAvailable(userId) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+    updatePrestigeAvailable(usersData, userId) {
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         const shouldHave = this.calculateAvailablePrestiges(user.level);
         const used = user.prestige;
         user.prestigeAvailable = Math.max(0, shouldHave - used);
     }
 
     setLevel(userId, targetLevel) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         
         if (targetLevel < 1) {
             return { success: false, message: "O nível deve ser pelo menos 1!" };
@@ -373,9 +415,10 @@ class LevelSystem {
         user.level = targetLevel;
         user.xp = totalXPNeeded;
         
-        this.updatePrestigeAvailable(userId);
+        this.updatePrestigeAvailable(usersData, userId);
         
-        this.saveUsersData();
+        // Sempre salvar no arquivo
+        this.writeUsersData(usersData);
         
         this.updateRankingAfterChange(userId);
         
@@ -391,8 +434,10 @@ class LevelSystem {
     }
 
     resetSetLevel(userId) {
-        this.initUser(userId);
-        const user = this.usersData[userId];
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         
         if (!user.levelHistory) {
             user.levelHistory = [];
@@ -427,7 +472,8 @@ class LevelSystem {
             user.levelHistory.splice(lastIndex, 1);
         }
         
-        this.saveUsersData();
+        // Sempre salvar no arquivo
+        this.writeUsersData(usersData);
         
         this.updateRankingAfterChange(userId);
         
@@ -446,9 +492,12 @@ class LevelSystem {
     }
 
     getRanking(limit = 10) {
-        console.log(`[DEBUG] Calculando ranking com ${Object.keys(this.usersData).length} usuários`);
+        // Sempre ler do arquivo
+        const usersData = this.readUsersData();
         
-        const sortedUsers = Object.entries(this.usersData)
+        console.log(`[DEBUG] Calculando ranking com ${Object.keys(usersData).length} usuários`);
+        
+        const sortedUsers = Object.entries(usersData)
             .sort(([,a], [,b]) => {
                 if (a.prestige !== b.prestige) return b.prestige - a.prestige;
                 if (a.level !== b.level) return b.level - a.level;
@@ -471,13 +520,18 @@ class LevelSystem {
     }
 
     updateRankingAfterChange(userId) {
-        this.updatePrestigeAvailable(userId);
+        // Sempre ler do arquivo
+        let usersData = this.readUsersData();
+        this.initUser(usersData, userId);
+        const user = usersData[userId];
         
-        this.saveUsersData();
+        this.updatePrestigeAvailable(usersData, userId);
         
-        const user = this.usersData[userId];
+        // Sempre salvar no arquivo
+        this.writeUsersData(usersData);
+        
         console.log(`[DEBUG] Ranking atualizado para ${userId}: Nível ${user.level}, XP ${user.xp}, Prestígio ${user.prestige}`);
-        console.log(`[DEBUG] Dados em memória - Total de usuários: ${Object.keys(this.usersData).length}`);
+        console.log(`[DEBUG] Dados do arquivo - Total de usuários: ${Object.keys(usersData).length}`);
         
         const testRanking = this.getRanking(3);
         console.log(`[DEBUG] Teste de ranking após mudança:`, testRanking.map(u => ({

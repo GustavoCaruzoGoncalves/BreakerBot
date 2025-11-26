@@ -16,7 +16,7 @@
   "type": "commonjs",
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@whiskeysockets/baileys": "^6.7.16",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "axios": "^1.8.3",
     "child_process": "^1.0.2",
     "dotenv": "^16.4.7",

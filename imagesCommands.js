@@ -20,20 +20,16 @@ async function imagesCommandsBot(sock, { messages }) {
     const isReplyToSticker = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.stickerMessage;
     const isReplyToVideo = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
     const messageWithText = msg.message.imageMessage?.caption || msg.message.videoMessage?.caption || msg.message.extendedTextMessage?.text || '';
-    
-    const isVideoWithStickerCommand = isVideo && !messageWithText && msg.message.videoMessage;
-    const isReplyToVideoWithStickerCommand = isReplyToVideo && !messageWithText;
 
     const isStickerCommand = messageWithText.startsWith("!sticker") || messageWithText.startsWith("!fsticker");
-    const isVideoStickerCommand = (isVideo || isReplyToVideo) && !messageWithText;
     
-    if (isStickerCommand || isVideoStickerCommand) {
+    if (isStickerCommand) {
         console.log("[DEBUG] Comando de figurinha detectado");
         console.log("[DEBUG] Tipo de mensagem:", messageType);
         console.log("[DEBUG] isImage:", isImage, "isReplyToImage:", isReplyToImage);
         console.log("[DEBUG] isVideo:", isVideo, "isReplyToVideo:", isReplyToVideo);
         console.log("[DEBUG] messageWithText:", messageWithText);
-        console.log("[DEBUG] isStickerCommand:", isStickerCommand, "isVideoStickerCommand:", isVideoStickerCommand);
+        console.log("[DEBUG] isStickerCommand:", isStickerCommand);
 
         if (isImage || isReplyToImage || isVideo || isReplyToVideo) {
             try {
@@ -66,13 +62,13 @@ async function imagesCommandsBot(sock, { messages }) {
                     console.log("[DEBUG] Processando vídeo...");
                     console.log("[DEBUG] Tamanho do buffer:", buffer.length);
 
-                    const command = messageWithText || "!sticker";
+                    const command = messageWithText;
                     await processVideoToSticker(buffer, stickerPath, command);
                 } else {
                     console.log("[DEBUG] Processando imagem...");
                     const sharpInstance = sharp(buffer).webp();
 
-                    const command = messageWithText || "!sticker";
+                    const command = messageWithText;
                     
                     if (command.startsWith("!sticker")) {
                         sharpInstance.resize(1080, 1920, { fit: 'cover' });
