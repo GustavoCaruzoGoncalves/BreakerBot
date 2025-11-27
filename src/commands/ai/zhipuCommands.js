@@ -1,7 +1,7 @@
 const { default: axios } = require("axios");
 const { downloadMediaMessage } = require("@whiskeysockets/baileys");
 require("dotenv").config();
-const { admins } = require("./adm");
+const { admins } = require("../../config/adm");
 
 const chatMemory = {};
 
@@ -11,7 +11,6 @@ async function zhipuCommandBot(sock, { messages }) {
 
     const chatId = msg.key.remoteJid;
     
-    // Identificar o usuário corretamente: em grupos usa participantAlt, em privado usa remoteJid
     const isGroup = msg.key.remoteJid.endsWith('@g.us');
     const sender = isGroup 
         ? (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid)

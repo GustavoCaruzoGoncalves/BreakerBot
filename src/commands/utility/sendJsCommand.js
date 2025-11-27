@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const admins = require('./adm');
+const { admins } = require('../../config/adm');
 
 async function sendJsCommandBot(sock, { messages }) {
     const msg = messages[0];
@@ -8,7 +8,6 @@ async function sendJsCommandBot(sock, { messages }) {
 
     const chatId = msg.key.remoteJid;
     
-    // Identificar o usuário corretamente: em grupos usa participantAlt, em privado usa remoteJid
     const isGroup = msg.key.remoteJid.endsWith('@g.us');
     const sender = isGroup 
         ? (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid)
@@ -22,7 +21,7 @@ async function sendJsCommandBot(sock, { messages }) {
     if (textMessage.startsWith("!js")) {
         console.log(`[DEBUG] Comando !js detectado de ${sender} no chat ${chatId}`);
 
-        if (!admins.admins.includes(sender)) {
+        if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Você não tem permissão para usar este comando. Apenas administradores podem executar !js.",
             }, { quoted: msg });
@@ -30,7 +29,7 @@ async function sendJsCommandBot(sock, { messages }) {
         }
 
         try {
-            const filePath = path.resolve(__dirname, 'jokesCommands.js');
+            const filePath = path.resolve(__dirname, '..', 'fun', 'jokesCommands.js');
             
             if (!fs.existsSync(filePath)) {
                 await sock.sendMessage(chatId, {
@@ -61,7 +60,7 @@ async function sendJsCommandBot(sock, { messages }) {
     if (textMessage.startsWith("!sendJson")) {
         console.log(`[DEBUG] Comando !sendJson detectado de ${sender} no chat ${chatId}`);
 
-        if (!admins.admins.includes(sender)) {
+        if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Você não tem permissão para usar este comando. Apenas administradores podem executar !sendJson.",
             }, { quoted: msg });
@@ -69,7 +68,7 @@ async function sendJsCommandBot(sock, { messages }) {
         }
 
         try {
-            const filePath = path.resolve(__dirname, 'levels_info', 'users.json');
+            const filePath = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
             
             if (!fs.existsSync(filePath)) {
                 await sock.sendMessage(chatId, {

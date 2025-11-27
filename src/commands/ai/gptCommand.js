@@ -1,7 +1,7 @@
 const { default: axios } = require("axios");
 const { downloadMediaMessage } = require("@whiskeysockets/baileys");
 require("dotenv").config();
-const { admins } = require("./adm");
+const { admins } = require("../../config/adm");
 
 const chatMemory = {};
 

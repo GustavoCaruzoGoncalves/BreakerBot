@@ -1,4 +1,4 @@
-const { admins } = require("./adm");
+const { admins } = require("../../config/adm");
 
 async function banCommandBot(sock, { messages }) {
     const msg = messages[0];
@@ -6,7 +6,6 @@ async function banCommandBot(sock, { messages }) {
 
     const groupId = msg.key.remoteJid;
     
-    // Identificar o usuário corretamente: em grupos usa participantAlt, em privado usa remoteJid
     const isGroup = msg.key.remoteJid.endsWith('@g.us');
     const sender = isGroup 
         ? (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid)
