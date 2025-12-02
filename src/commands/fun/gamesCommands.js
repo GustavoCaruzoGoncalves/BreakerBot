@@ -1,11 +1,38 @@
 const { default: axios } = require("axios");
 require("dotenv").config();
+const mentionsController = require("../../controllers/mentionsController");
 
-let score = 0;
-let questionIndex = 0;
-let triviaQuestions = [];
+const playerGames = new Map();
 
 const RATE_LIMIT_ERROR = 'rate-overlimit';
+
+function getPlayerId(msg) {
+    return msg.key.participant || msg.key.participantAlt || msg.key.remoteJid;
+}
+
+function getPlayerGame(playerId) {
+    if (!playerGames.has(playerId)) {
+        playerGames.set(playerId, {
+            score: 0,
+            questionIndex: 0,
+            triviaQuestions: []
+        });
+    }
+    return playerGames.get(playerId);
+}
+
+function resetPlayerGame(playerId) {
+    playerGames.set(playerId, {
+        score: 0,
+        questionIndex: 0,
+        triviaQuestions: []
+    });
+    return playerGames.get(playerId);
+}
+
+function clearPlayerGame(playerId) {
+    playerGames.delete(playerId);
+}
 
 async function askZhipuQuiz() {
     try {
@@ -81,10 +108,10 @@ function parseZhipuQuizResponse(response) {
     return questions;
 }
 
-async function sendMessageWithRetry(sock, chatId, message, retries = 3, delay = 2000) {
+async function sendMessageWithRetry(sock, chatId, message, mentions = [], retries = 3, delay = 2000) {
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            await sock.sendMessage(chatId, { text: message });
+            await sock.sendMessage(chatId, { text: message, mentions });
             break;
         } catch (err) {
             if (err.message.includes(RATE_LIMIT_ERROR) && attempt < retries) {
@@ -98,6 +125,14 @@ async function sendMessageWithRetry(sock, chatId, message, retries = 3, delay = 
     }
 }
 
+function getPlayerMentionPrefix(playerId) {
+    const mentionInfo = mentionsController.processSingleMention(playerId);
+    return {
+        prefix: `🎯 Jogo de ${mentionInfo.mentionText}\n\n`,
+        mentions: mentionInfo.mentions
+    };
+}
+
 async function gamesCommandsBot(sock, { messages }) {
     const msg = messages[0];
 
@@ -105,78 +140,86 @@ async function gamesCommandsBot(sock, { messages }) {
 
     const chatId = msg.key.remoteJid;
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+    const playerId = getPlayerId(msg);
 
     if (text === "!trivia start") {
-        questionIndex = 0;
-        score = 0;
+        const playerGame = resetPlayerGame(playerId);
+        const { prefix, mentions } = getPlayerMentionPrefix(playerId);
         
-        await sendMessageWithRetry(sock, chatId, "Bem-vindo ao jogo de trivia! Gerando perguntas com IA... ⏳");
+        await sendMessageWithRetry(sock, chatId, `${prefix}Bem-vindo ao jogo de trivia! Gerando perguntas com IA... ⏳`, mentions);
         
         const aiResponse = await askZhipuQuiz();
         
         if (!aiResponse) {
-            await sendMessageWithRetry(sock, chatId, "Erro ao gerar perguntas. Tente novamente mais tarde.");
+            await sendMessageWithRetry(sock, chatId, `${prefix}Erro ao gerar perguntas. Tente novamente mais tarde.`, mentions);
+            clearPlayerGame(playerId);
             return;
         }
         
-        triviaQuestions = parseZhipuQuizResponse(aiResponse);
+        playerGame.triviaQuestions = parseZhipuQuizResponse(aiResponse);
         
-        if (triviaQuestions.length === 0) {
-            await sendMessageWithRetry(sock, chatId, "Erro ao processar perguntas. Tente novamente.");
+        if (playerGame.triviaQuestions.length === 0) {
+            await sendMessageWithRetry(sock, chatId, `${prefix}Erro ao processar perguntas. Tente novamente.`, mentions);
+            clearPlayerGame(playerId);
             return;
         }
         
-        await sendMessageWithRetry(sock, chatId, `Perguntas geradas! Total: ${triviaQuestions.length} perguntas. Vamos começar! 🎮`);
-        askNextQuestion(sock, chatId);
+        await sendMessageWithRetry(sock, chatId, `${prefix}Perguntas geradas! Total: ${playerGame.triviaQuestions.length} perguntas. Vamos começar! 🎮`, mentions);
+        askNextQuestion(sock, chatId, playerId);
     }
 
     else if (text && text.startsWith("!trivia resposta")) {
         const userAnswer = text.split(" ")[2];
+        const { prefix, mentions } = getPlayerMentionPrefix(playerId);
+        
         if (!userAnswer) {
-            await sendMessageWithRetry(sock, chatId, "Por favor, forneça uma resposta (A, B, C ou D). Exemplo: !trivia resposta A");
+            await sendMessageWithRetry(sock, chatId, `${prefix}Por favor, forneça uma resposta (A, B, C ou D). Exemplo: !trivia resposta A`, mentions);
             return;
         }
 
-        if (triviaQuestions.length === 0 || questionIndex >= triviaQuestions.length) {
-            await sendMessageWithRetry(sock, chatId, "Nenhum jogo em andamento. Use !trivia start para começar.");
+        const playerGame = getPlayerGame(playerId);
+
+        if (playerGame.triviaQuestions.length === 0 || playerGame.questionIndex >= playerGame.triviaQuestions.length) {
+            await sendMessageWithRetry(sock, chatId, `${prefix}Nenhum jogo em andamento. Use !trivia start para começar.`, mentions);
             return;
         }
 
-        const correctAnswer = triviaQuestions[questionIndex].answer;
+        const correctAnswer = playerGame.triviaQuestions[playerGame.questionIndex].answer;
         
         if (userAnswer.toUpperCase() === correctAnswer.toUpperCase()) {
-            score++;
-            await sendMessageWithRetry(sock, chatId, `✅ Resposta correta! Sua pontuação é: ${score}`);
+            playerGame.score++;
+            await sendMessageWithRetry(sock, chatId, `${prefix}✅ Resposta correta! Sua pontuação é: ${playerGame.score}`, mentions);
         } else {
-            await sendMessageWithRetry(sock, chatId, `❌ Resposta errada! A resposta correta era: ${correctAnswer}`);
+            await sendMessageWithRetry(sock, chatId, `${prefix}❌ Resposta errada! A resposta correta era: ${correctAnswer}`, mentions);
         }
 
-        questionIndex++;
-        if (questionIndex < triviaQuestions.length) {
-            askNextQuestion(sock, chatId);
+        playerGame.questionIndex++;
+        if (playerGame.questionIndex < playerGame.triviaQuestions.length) {
+            askNextQuestion(sock, chatId, playerId);
         } else {
-            await sendMessageWithRetry(sock, chatId, `🎉 Você terminou o jogo! Sua pontuação final é ${score} de ${triviaQuestions.length}`);
-            triviaQuestions = [];
+            await sendMessageWithRetry(sock, chatId, `${prefix}🎉 Você terminou o jogo! Sua pontuação final é ${playerGame.score} de ${playerGame.triviaQuestions.length}`, mentions);
+            clearPlayerGame(playerId);
         }
     }
 }
 
-async function askNextQuestion(sock, chatId) {
-    if (questionIndex < triviaQuestions.length) {
+async function askNextQuestion(sock, chatId, playerId) {
+    const playerGame = getPlayerGame(playerId);
+    const { prefix, mentions } = getPlayerMentionPrefix(playerId);
+    
+    if (playerGame.questionIndex < playerGame.triviaQuestions.length) {
         setTimeout(async () => {
-            const currentQ = triviaQuestions[questionIndex];
-            const questionText = `
-📝 Pergunta ${questionIndex + 1}/${triviaQuestions.length}:
+            const currentQ = playerGame.triviaQuestions[playerGame.questionIndex];
+            const questionText = `${prefix}📝 Pergunta ${playerGame.questionIndex + 1}/${playerGame.triviaQuestions.length}:
 
 ${currentQ.question}
 
 ${currentQ.options.join('\n')}
 
 Responda com: !trivia resposta [letra]
-Exemplo: !trivia resposta A
-            `.trim();
+Exemplo: !trivia resposta A`;
             
-            await sendMessageWithRetry(sock, chatId, questionText);
+            await sendMessageWithRetry(sock, chatId, questionText, mentions);
         }, 1000);
     }
 }

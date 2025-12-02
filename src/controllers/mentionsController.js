@@ -67,7 +67,25 @@ function setMentionsEnabled(enabled) {
 
 function getUserMentionPreference(jid) {
     const usersData = readUsersData();
-    const user = usersData[jid];
+    
+    let user = null;
+    
+    for (const [savedJid, userData] of Object.entries(usersData)) {
+        if (userData.jid === jid) {
+            user = userData;
+            break;
+        }
+    }
+    
+    if (!user) {
+        user = usersData[jid];
+    }
+    
+    if (!user) {
+        const phoneNumber = jid.split('@')[0].split(':')[0];
+        const possibleJid = `${phoneNumber}@s.whatsapp.net`;
+        user = usersData[possibleJid];
+    }
     
     if (!user) {
         return false;
