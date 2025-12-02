@@ -115,6 +115,26 @@ class LevelSystem {
         }
     }
 
+    findUserKey(usersData, jid) {
+        if (usersData[jid]) {
+            return jid;
+        }
+        
+        for (const [savedJid, userData] of Object.entries(usersData)) {
+            if (userData.jid === jid) {
+                return savedJid;
+            }
+        }
+        
+        const phoneNumber = jid.split('@')[0].split(':')[0];
+        const possibleJid = `${phoneNumber}@s.whatsapp.net`;
+        if (usersData[possibleJid]) {
+            return possibleJid;
+        }
+        
+        return null;
+    }
+
     getRequiredXP(level) {
         if (level < 10) {
             return 100 + (level - 1) * 10;
@@ -322,11 +342,15 @@ class LevelSystem {
 
     getUserInfo(userId) {
         let usersData = this.readUsersData();
-        this.initUser(usersData, userId);
-        let user = usersData[userId];
+        
+        const userKey = this.findUserKey(usersData, userId);
+        const actualUserId = userKey || userId;
+        
+        this.initUser(usersData, actualUserId);
+        let user = usersData[actualUserId];
         const currentRank = this.getUserRank(user.level);
         
-        this.updatePrestigeAvailable(usersData, userId);
+        this.updatePrestigeAvailable(usersData, actualUserId);
         
         let totalXPNeeded = 0;
         for (let i = 1; i < user.level; i++) {
@@ -342,7 +366,7 @@ class LevelSystem {
             user.dailyBonusExpiry = null;
             this.writeUsersData(usersData);
             usersData = this.readUsersData();
-            user = usersData[userId];
+            user = usersData[actualUserId];
         }
         
         const prestigeMultiplier = 1 + (user.prestige * 0.5);

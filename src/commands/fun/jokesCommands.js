@@ -391,85 +391,77 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.startsWith("!ship")) {
-        console.log("[DEBUG] Comando !ship detectado");
-        console.log('========== LOG DE MENÇÃO (!ship) ==========');
-        console.log('[DEBUG] Mensagem completa (msg):', JSON.stringify(msg, null, 2));
-        console.log('[DEBUG] msg.key:', JSON.stringify(msg.key, null, 2));
-        console.log('[DEBUG] msg.message:', JSON.stringify(msg.message, null, 2));
-        console.log('[DEBUG] msg.message.extendedTextMessage:', JSON.stringify(msg.message.extendedTextMessage, null, 2));
-        console.log('[DEBUG] contextInfo:', JSON.stringify(msg.message.extendedTextMessage?.contextInfo, null, 2));
-        console.log('[DEBUG] mentionedJid:', JSON.stringify(msg.message.extendedTextMessage?.contextInfo?.mentionedJid, null, 2));
-        console.log('[DEBUG] participantAlt:', msg.key.participantAlt);
-        console.log('[DEBUG] participant:', msg.key.participant);
-        console.log('[DEBUG] sender:', sender);
-        console.log('===========================================');
-
-        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
-
-        if (mentionedJid && mentionedJid.length === 2) {
-            const userToMention1 = mentionedJid[0];
-            const userToMention2 = mentionedJid[1];
-            const mentionInfo1 = mentionsController.processSingleMention(userToMention1, contactsCache);
-            const mentionInfo2 = mentionsController.processSingleMention(userToMention2, contactsCache);
-            
-            const mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
-            const percentage = Math.floor(Math.random() * 101);
-            let replyText = `${mentionInfo1.mentionText} e ${mentionInfo2.mentionText} tem ${percentage}% de chance de namorarem! 👫👫👫`;
-            
-            if ((!mentionInfo1.hasName && !mentionInfo1.canMention) || (!mentionInfo2.hasName && !mentionInfo2.canMention)) {
-                replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
-            }
-
+        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const inputText = textMessage.slice(5).trim();
+        
+        if (!inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: replyText,
-                mentions: mentions,
+                text: "Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: !ship João e Maria ou !ship eu e Maria",
             }, { quoted: msg });
-
-        } else {
-            const args = textMessage.slice(5).trim().split(" ");
-            const nameArgument = args[0];
-            const nameArgument2 = args.slice(1).join(" ");
-
-            if ((nameArgument.toLowerCase() === "eu" || nameArgument.toLowerCase() === "me") && !nameArgument2) {
-                const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
-                
-                const percentage = Math.floor(Math.random() * 101);
-                const replyText = `Você e ${mentionInfo.mentionText} tem ${percentage}% de chance de namorarem! 👫👫👫`;
-
-                await sock.sendMessage(chatId, {
-                    text: replyText,
-                    mentions: mentionInfo.mentions,
-                }, { quoted: msg });
-
-            } else if (nameArgument && nameArgument2 && mentionedJid?.length === 1) {
-                const userMentioned = mentionedJid[0];
-                const mentionInfo = mentionsController.processSingleMention(userMentioned, contactsCache);
-                const percentage = Math.floor(Math.random() * 101);
-
-                const isFirstMention = nameArgument.includes("@");
-                const replyText = isFirstMention
-                    ? `${mentionInfo.mentionText} e ${nameArgument2} tem ${percentage}% de chance de namorarem! 👫👫👫`
-                    : `${nameArgument} e ${mentionInfo.mentionText} tem ${percentage}% de chance de namorarem! 👫👫👫`;
-
-                await sock.sendMessage(chatId, {
-                    text: replyText,
-                    mentions: mentionInfo.mentions,
-                }, { quoted: msg });
-
-            } else if (nameArgument && nameArgument2) {
-                const percentage = Math.floor(Math.random() * 101);
-                const replyText = `${nameArgument} e ${nameArgument2} tem ${percentage}% de chance de namorarem! 👫👫👫`;
-
-                await sock.sendMessage(chatId, {
-                    text: replyText,
-                }, { quoted: msg });
-
-            } else {
-                await sock.sendMessage(chatId, {
-                    text: "Por favor, mencione dois usuários ou forneça dois nomes com o comando !ship nome1 nome2.",
-                }, { quoted: msg });
-            }
+            return;
         }
+
+        let name1 = "";
+        let name2 = "";
+        let mentions = [];
+        let mentionIndex = 0;
+
+        if (inputText.toLowerCase().includes(" e ")) {
+            const parts = inputText.split(/ e /i);
+            name1 = parts[0].trim();
+            name2 = parts.slice(1).join(" e ").trim();
+        } else if (inputText.includes(" ")) {
+            const spaceIndex = inputText.indexOf(" ");
+            name1 = inputText.slice(0, spaceIndex).trim();
+            name2 = inputText.slice(spaceIndex + 1).trim();
+        } else if (mentionedJid.length === 2) {
+            const mentionInfo1 = mentionsController.processSingleMention(mentionedJid[0], contactsCache);
+            const mentionInfo2 = mentionsController.processSingleMention(mentionedJid[1], contactsCache);
+            name1 = mentionInfo1.mentionText;
+            name2 = mentionInfo2.mentionText;
+            mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
+        } else if (inputText && mentionedJid.length === 0) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: !ship João e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        const processName = (name) => {
+            const lowerName = name.toLowerCase().trim();
+            if (lowerName === "eu" || lowerName === "me") {
+                return "Você";
+            }
+            
+            if (name.includes("@") && mentionedJid.length > mentionIndex) {
+                const mentionInfo = mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
+                mentions.push(...mentionInfo.mentions);
+                mentionIndex++;
+                return mentionInfo.mentionText;
+            }
+            
+            return name;
+        };
+
+        if (name1 && name2) {
+            name1 = processName(name1);
+            name2 = processName(name2);
+        }
+
+        if (!name1 || !name2) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, forneça dois nomes.\nExemplo: !ship João e Maria ou !ship eu e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        const percentage = Math.floor(Math.random() * 101);
+        const replyText = `${name1} e ${name2} tem ${percentage}% de chance de namorarem! 👫👫👫`;
+
+        await sock.sendMessage(chatId, {
+            text: replyText,
+            mentions: mentions,
+        }, { quoted: msg });
     }
 
 }
