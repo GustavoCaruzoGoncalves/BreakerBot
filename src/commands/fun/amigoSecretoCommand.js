@@ -185,11 +185,111 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             if (!participantesData[chatId].presentes) {
                 participantesData[chatId].presentes = {};
             }
+
+            const presenteAtual = participantesData[chatId].presentes[participantJid];
+            if (presenteAtual) {
+                participantesData[chatId].presentes[participantJid] = `${presenteAtual}, ${presente}`;
+            } else {
+                participantesData[chatId].presentes[participantJid] = presente;
+            }
+            saveParticipantes(participantesData);
+
+            await sock.sendMessage(chatId, {
+                text: `✅ Presente adicionado com sucesso!\n\n🎁 Seus desejos: *${participantesData[chatId].presentes[participantJid]}*`,
+            }, { quoted: msg });
+            return;
+
+        } else if (subComando === 'delete') {
+            if (!isGroup) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Este comando só pode ser usado em grupos!",
+                }, { quoted: msg });
+                return;
+            }
+
+            const participantesData = loadParticipantes();
+            if (!participantesData[chatId] || !participantesData[chatId].participantes) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
+                }, { quoted: msg });
+                return;
+            }
+
+            const participantes = participantesData[chatId].participantes;
+            const participant = msg.key.participant;
+            const participantAlt = msg.key.participantAlt;
+            
+            const participantJid = findParticipantJid(participant, participantAlt, participantes);
+            
+            if (!participantJid) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Você não está na lista de participantes do amigo secreto!",
+                }, { quoted: msg });
+                return;
+            }
+
+            if (!participantesData[chatId].presentes || !participantesData[chatId].presentes[participantJid]) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Você não tem nenhum presente cadastrado!",
+                }, { quoted: msg });
+                return;
+            }
+
+            delete participantesData[chatId].presentes[participantJid];
+            saveParticipantes(participantesData);
+
+            await sock.sendMessage(chatId, {
+                text: `✅ Presente removido com sucesso!`,
+            }, { quoted: msg });
+            return;
+
+        } else if (subComando === 'edit') {
+            if (!isGroup) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Este comando só pode ser usado em grupos!",
+                }, { quoted: msg });
+                return;
+            }
+
+            const participantesData = loadParticipantes();
+            if (!participantesData[chatId] || !participantesData[chatId].participantes) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
+                }, { quoted: msg });
+                return;
+            }
+
+            const participantes = participantesData[chatId].participantes;
+            const participant = msg.key.participant;
+            const participantAlt = msg.key.participantAlt;
+            
+            const participantJid = findParticipantJid(participant, participantAlt, participantes);
+            
+            if (!participantJid) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Você não está na lista de participantes do amigo secreto!",
+                }, { quoted: msg });
+                return;
+            }
+
+            const presente = textMessage.slice('!amigosecreto listapresente edit'.length).trim();
+
+            if (!presente) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Você precisa especificar o novo presente!\n\n💡 Use: !amigoSecreto listaPresente edit <novo presente>",
+                }, { quoted: msg });
+                return;
+            }
+
+            if (!participantesData[chatId].presentes) {
+                participantesData[chatId].presentes = {};
+            }
+
             participantesData[chatId].presentes[participantJid] = presente;
             saveParticipantes(participantesData);
 
             await sock.sendMessage(chatId, {
-                text: `✅ Presente adicionado com sucesso!\n\n🎁 Seu desejo: *${presente}*`,
+                text: `✅ Presente editado com sucesso!\n\n🎁 Seu desejo: *${presente}*`,
             }, { quoted: msg });
             return;
 
@@ -526,13 +626,17 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 `   Você pode escrever "me" ou "eu" para se adicionar\n` +
                 `📋 *!amigoSecreto lista* - Mostra a lista de participantes\n` +
                 `🎁 *!amigoSecreto listaPresente add <presente>* - Adiciona seu desejo de presente\n` +
+                `   (Use múltiplas vezes para adicionar mais presentes)\n` +
+                `✏️ *!amigoSecreto listaPresente edit <presente>* - Edita seu presente\n` +
+                `🗑️ *!amigoSecreto listaPresente delete* - Remove seu presente\n` +
                 `📋 *!amigoSecreto listaPresente* - Lista todos os presentes do grupo\n` +
                 `📋 *!amigoSecreto listaPresente grupo "nome"* - Lista presentes no PV\n` +
                 `🎲 *!amigoSecreto sortear* - Realiza o sorteio e envia no PV de cada um\n\n` +
                 `💡 Exemplos:\n` +
                 `   !amigoSecreto add @pessoa1 @pessoa2 @pessoa3\n` +
                 `   !amigoSecreto add me @pessoa1 @pessoa2\n` +
-                `   !amigoSecreto listaPresente add Um livro`,
+                `   !amigoSecreto listaPresente add Um livro\n` +
+                `   !amigoSecreto listaPresente add Um caderno`,
         }, { quoted: msg });
     }
 }
