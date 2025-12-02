@@ -117,6 +117,12 @@ async function zhipuCommandBot(sock, { messages }) {
         await sock.sendMessage(chatId, { text: response });
     }
 
+    if (text.startsWith("!quiz")) {
+        const response = await askZhipuQuiz();
+        await sock.sendMessage(chatId, { text: response });
+        return;
+    }
+
     async function askZhipu(messages) {
         try {
             const apiKey = process.env.ZHIPU_API_KEY;
@@ -142,6 +148,38 @@ async function zhipuCommandBot(sock, { messages }) {
         } catch (error) {
             console.error("Erro Zhipu GLM-4.5:", error?.response?.data || error);
             return "Erro ao processar mensagem com Zhipu GLM-4.5.";
+        }
+    }
+
+    async function askZhipuQuiz() {
+        try {
+            const apiKey = process.env.ZHIPU_API_KEY;
+            const response = await axios.post(
+                "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+                {
+                    model: "glm-4.5",
+                    messages: [
+                        {
+                            role: "system",
+                            content: "Você é um assistente que gera perguntas sobre coisas aleatórias do mundo com alternativas (A, B, C, D). Você começa com Pergunta: (pergunta), em baixo as alternativas e a resposta correta"
+                        },
+                        {
+                            role: "user",
+                            content: "Gere 10 perguntas em português brasileiro."
+                        }
+                    ]
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    }
+                }
+            );
+            return response.data.choices[0].message.content;
+        } catch (error) {
+            console.error("Erro Zhipu GLM-4.5 com quiz:", error?.response?.data || error);
+            return "Erro ao processar quiz com Zhipu GLM-4.5.";
         }
     }
 
