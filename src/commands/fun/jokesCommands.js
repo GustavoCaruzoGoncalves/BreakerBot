@@ -156,7 +156,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             }
         }
     }
-o
+
     const tomateNumber = process.env.TOMATE_NUMBER;
     console.log(`[DEBUG TOMATE] Sender: ${sender}`);
     console.log(`[DEBUG TOMATE] Esperado: ${tomateNumber}@s.whatsapp.net`);
