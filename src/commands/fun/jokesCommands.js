@@ -15,6 +15,28 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     const messageType = Object.keys(msg.message)[0];
     const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
+    const poopNumber = process.env.POOP_NUMBER;
+    if (messageType === 'reactionMessage') {
+        const reactionSender = isGroup 
+            ? (msg.key.participantAlt || msg.key.remoteJid)
+            : msg.key.remoteJid;
+        
+        console.log(`[DEBUG POOP REAÇÃO] Reação detectada!`);
+        console.log(`[DEBUG POOP REAÇÃO] Sender: ${reactionSender}`);
+        console.log(`[DEBUG POOP REAÇÃO] Match: ${reactionSender.includes(poopNumber)}`);
+        
+        if (reactionSender.includes(poopNumber)) {
+            try {
+                await sock.sendMessage(chatId, {
+                    text: "💩"
+                });
+                console.log(`[DEBUG POOP REAÇÃO] Mensagem enviada com sucesso!`);
+            } catch (err) {
+                console.error(`[DEBUG POOP REAÇÃO] Erro ao enviar mensagem:`, err);
+            }
+        }
+    }
+
     function getPushName(jid) {
         return mentionsController.getPushName(jid, contactsCache);
     }
@@ -132,6 +154,46 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                     text: `Por favor, mencione um usuário ou forneça um nome com o comando ${command} nome.`,
                 }, { quoted: msg });
             }
+        }
+    }
+o
+    const tomateNumber = process.env.TOMATE_NUMBER;
+    console.log(`[DEBUG TOMATE] Sender: ${sender}`);
+    console.log(`[DEBUG TOMATE] Esperado: ${tomateNumber}@s.whatsapp.net`);
+    console.log(`[DEBUG TOMATE] Match: ${sender === tomateNumber + "@s.whatsapp.net"}`);
+    console.log(`[DEBUG TOMATE] Sender includes: ${sender.includes(tomateNumber)}`);
+    
+    if (sender.includes(tomateNumber)) {
+        try {
+            await sock.sendMessage(chatId, {
+                react: {
+                    text: "🍅",
+                    key: msg.key
+                }
+            });
+            console.log(`[DEBUG TOMATE] Reação enviada com sucesso!`);
+        } catch (err) {
+            console.error(`[DEBUG TOMATE] Erro ao enviar reação:`, err);
+        }
+    }
+
+    const jegueNumber = process.env.JEGUE_NUMBER;
+    console.log(`[DEBUG JEGUE] Sender: ${sender}`);
+    console.log(`[DEBUG JEGUE] Esperado: ${jegueNumber}@s.whatsapp.net`);
+    console.log(`[DEBUG JEGUE] Match: ${sender === jegueNumber + "@s.whatsapp.net"}`);
+    console.log(`[DEBUG JEGUE] Sender includes: ${sender.includes(jegueNumber)}`);
+    
+    if (sender.includes(jegueNumber)) {
+        try {
+            await sock.sendMessage(chatId, {
+                react: {
+                    text: "🫏",
+                    key: msg.key
+                }
+            });
+            console.log(`[DEBUG JEGUE] Reação enviada com sucesso!`);
+        } catch (err) {
+            console.error(`[DEBUG JEGUE] Erro ao enviar reação:`, err);
         }
     }
 

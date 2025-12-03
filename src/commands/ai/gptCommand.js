@@ -30,7 +30,7 @@ async function gptCommandBot(sock, { messages }) {
         chatMemory[chatId] = [];
     }
 
-    if (text && !text.startsWith("!gpt4")) {
+    if (text && !text.startsWith("!gpt5") && !text.startsWith("!gpt")) {
         chatMemory[chatId].push({ role: "user", content: text });
 
         if (chatMemory[chatId].length > 30) {
@@ -51,8 +51,9 @@ async function gptCommandBot(sock, { messages }) {
         return;
     }
 
-    if (text.startsWith("!gpt4")) {
-        let userPrompt = text.replace("!gpt4", "").trim();
+    // ===================== GPT-5 NANO (ATIVO) =====================
+    if (text.startsWith("!gpt5") || text.startsWith("!gpt ")) {
+        let userPrompt = text.replace("!gpt5", "").replace("!gpt ", "").trim();
         let imageBuffer = null;
 
         const promptMessages = [];
@@ -69,7 +70,7 @@ async function gptCommandBot(sock, { messages }) {
         if (imageBuffer) {
             const base64Image = imageBuffer.toString("base64");
             const promptImagem = userPrompt || "Descreva essa imagem.";
-            const response = await askChatGPT4WithImage(base64Image, promptImagem);
+            const response = await askGPT5NanoWithImage(base64Image, promptImagem);
 
             if (!chatMemory[chatId]) chatMemory[chatId] = [];
             chatMemory[chatId].push({ role: "user", content: promptImagem });
@@ -91,7 +92,7 @@ async function gptCommandBot(sock, { messages }) {
 
         if (userPrompt.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "❌ Digite uma pergunta junto com `!gpt4`."
+                text: "❌ Digite uma pergunta junto com `!gpt5` ou `!gpt`."
             });
             return;
         }
@@ -104,7 +105,7 @@ async function gptCommandBot(sock, { messages }) {
             ...promptMessages
         ];
 
-        const response = await askChatGPT4(finalMessages);
+        const response = await askGPT5Nano(finalMessages);
 
         if (!chatMemory[chatId]) chatMemory[chatId] = [];
         chatMemory[chatId].push(...promptMessages);
@@ -117,11 +118,79 @@ async function gptCommandBot(sock, { messages }) {
         await sock.sendMessage(chatId, { text: response });
     }
 
-    if (text.startsWith("!gpt3")) {
-        const query = text.replace("!gpt3", "").trim();
-        const response = await askChatGPT3(query);
-        await sock.sendMessage(chatId, { text: response });
-    }
+    // ===================== GPT-4 (COMENTADO) =====================
+    // if (text.startsWith("!gpt4")) {
+    //     let userPrompt = text.replace("!gpt4", "").trim();
+    //     let imageBuffer = null;
+
+    //     const promptMessages = [];
+
+    //     const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+    //     if (quoted?.imageMessage) {
+    //         const fakeMsg = { message: quoted };
+    //         imageBuffer = await downloadMediaMessage(fakeMsg, "buffer");
+    //     } else if (msg.message.imageMessage) {
+    //         imageBuffer = await downloadMediaMessage(msg, "buffer");
+    //     }
+
+    //     if (imageBuffer) {
+    //         const base64Image = imageBuffer.toString("base64");
+    //         const promptImagem = userPrompt || "Descreva essa imagem.";
+    //         const response = await askChatGPT4WithImage(base64Image, promptImagem);
+
+    //         if (!chatMemory[chatId]) chatMemory[chatId] = [];
+    //         chatMemory[chatId].push({ role: "user", content: promptImagem });
+    //         chatMemory[chatId].push({ role: "assistant", content: response });
+
+    //         await sock.sendMessage(chatId, { text: response });
+    //         return;
+    //     }
+
+    //     const quotedText =
+    //         quoted?.conversation ||
+    //         quoted?.extendedTextMessage?.text ||
+    //         quoted?.imageMessage?.caption ||
+    //         quoted?.videoMessage?.caption;
+
+    //     if (quotedText) {
+    //         promptMessages.push({ role: "user", content: quotedText });
+    //     }
+
+    //     if (userPrompt.length === 0) {
+    //         await sock.sendMessage(chatId, {
+    //             text: "❌ Digite uma pergunta junto com `!gpt4`."
+    //         });
+    //         return;
+    //     }
+
+    //     promptMessages.push({ role: "user", content: userPrompt });
+
+    //     const finalMessages = [
+    //         { role: "system", content: "Você é um assistente que responde de forma direta e com base nas mensagens marcadas como contexto. Suas respostas anteriores também são consideradas parte da conversa." },
+    //         ...(chatMemory[chatId] || []),
+    //         ...promptMessages
+    //     ];
+
+    //     const response = await askChatGPT4(finalMessages);
+
+    //     if (!chatMemory[chatId]) chatMemory[chatId] = [];
+    //     chatMemory[chatId].push(...promptMessages);
+    //     chatMemory[chatId].push({ role: "assistant", content: response });
+
+    //     if (chatMemory[chatId].length > 30) {
+    //         chatMemory[chatId] = chatMemory[chatId].slice(-30);
+    //     }
+
+    //     await sock.sendMessage(chatId, { text: response });
+    // }
+
+    // ===================== GPT-3 (COMENTADO) =====================
+    // if (text.startsWith("!gpt3")) {
+    //     const query = text.replace("!gpt3", "").trim();
+    //     const response = await askChatGPT3(query);
+    //     await sock.sendMessage(chatId, { text: response });
+    // }
 
 //    if (text.startsWith("!dalle")) {
 //    const promptOriginal = text.replace("!dalle", "").trim();
@@ -161,97 +230,169 @@ async function gptCommandBot(sock, { messages }) {
 //}
 
 
-async function askChatGPT3(prompt) {
-        try {
-            const apiKey = process.env.OPENAI_API_KEY;
-            const response = await axios.post(
-                "https://api.openai.com/v1/chat/completions",
-                {
-                    model: "gpt-3.5-turbo",
-                    messages: [{ role: "user", content: prompt }],
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
-                    }
+// ===================== FUNÇÕES GPT-5 NANO (ATIVAS) =====================
+async function askGPT5Nano(messages) {
+    try {
+        const apiKey = process.env.OPENAI_API_KEY;
+        const systemMessage = {
+            role: "system",
+            content: "Você é um assistente que leva muito em conta as informações passadas pelo usuário, mas ele não é absoluto, quando se tratar de coisas, pessoas e acontecimentos públicos ao invés desses mesmos cenários só que em contextos de imaginação pelo usuário, valide as informações. Se o usuário afirmar algo, você tem que reafirmar isso com convicção, mas se o usuário fizer uma pergunta, ou seja, terminar com interrogração, você não deve só anotar e afirmar que aquilo é contexto, só deve-se considerar contexto o que é afirmado pelo usuário. O que não for informado ou não estiver no contexto, você não avisa que não está no contexto e que pesquisou para responder, apenas use sua base e responda-o.",
+        };
+
+        const response = await axios.post(
+            "https://api.openai.com/v1/chat/completions",
+            {
+                model: "gpt-5-nano",
+                messages: [systemMessage, ...messages],
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
                 }
-            );
-            return response.data.choices[0].message.content;
-        } catch (error) {
-            console.error("Erro GPT-3:", error?.response?.data || error);
-            return "Erro ao processar mensagem com GPT-3.";
-        }
+            }
+        );
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error("Erro GPT-5 Nano:", error?.response?.data || error);
+        return "Erro ao processar mensagem com GPT-5 Nano.";
     }
+}
 
-    async function askChatGPT4(messages) {
-        try {
-            const apiKey = process.env.OPENAI_API_KEY;
-            const systemMessage = {
-                role: "system",
-                content: "Você é um assistente que leva muito em conta as informações passadas pelo usuário, mas ele não é absoluto, quando se tratar de coisas, pessoas e acontecimentos públicos ao invés desses mesmos cenários só que em contextos de imaginação pelo usuário, valide as informações. Se o usuário afirmar algo, você tem que reafirmar isso com convicção, mas se o usuário fizer uma pergunta, ou seja, terminar com interrogração, você não deve só anotar e afirmar que aquilo é contexto, só deve-se considerar contexto o que é afirmado pelo usuário. O que não for informado ou não estiver no contexto, você não avisa que não está no contexto e que pesquisou para responder, apenas use sua base e responda-o.",
-            };
+async function askGPT5NanoWithImage(base64Image, prompt) {
+    try {
+        const apiKey = process.env.OPENAI_API_KEY;
 
-            const response = await axios.post(
-                "https://api.openai.com/v1/chat/completions",
-                {
-                    model: "gpt-4o",
-                    messages: [systemMessage, ...messages],
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
-                    }
-                }
-            );
-            return response.data.choices[0].message.content;
-        } catch (error) {
-            console.error("Erro GPT-4:", error?.response?.data || error);
-            return "Erro ao processar mensagem com GPT-4.";
-        }
-    }
-
-    async function askChatGPT4WithImage(base64Image, prompt) {
-        try {
-            const apiKey = process.env.OPENAI_API_KEY;
-
-            const response = await axios.post(
-                "https://api.openai.com/v1/chat/completions",
-                {
-                    model: "gpt-4o",
-                    messages: [
-                        {
-                            role: "system",
-                            content: "Você é um assistente que interpreta imagens e responde de forma precisa com base na imagem e no texto enviado pelo usuário."
-                        },
-                        {
-                            role: "user",
-                            content: [
-                                { type: "text", text: prompt || "Descreva essa imagem." },
-                                {
-                                    type: "image_url",
-                                    image_url: {
-                                        url: `data:image/jpeg;base64,${base64Image}`
-                                    }
+        const response = await axios.post(
+            "https://api.openai.com/v1/chat/completions",
+            {
+                model: "gpt-5-nano",
+                messages: [
+                    {
+                        role: "system",
+                        content: "Você é um assistente que interpreta imagens e responde de forma precisa com base na imagem e no texto enviado pelo usuário."
+                    },
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: prompt || "Descreva essa imagem." },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: `data:image/jpeg;base64,${base64Image}`
                                 }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        "Content-Type": "application/json"
+                            }
+                        ]
                     }
+                ]
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
                 }
-            );
-            return response.data.choices[0].message.content;
-        } catch (error) {
-            console.error("Erro GPT-4 com imagem:", error?.response?.data || error);
-            return "Erro ao processar imagem com GPT-4.";
-        }
+            }
+        );
+        return response.data.choices[0].message.content;
+    } catch (error) {
+        console.error("Erro GPT-5 Nano com imagem:", error?.response?.data || error);
+        return "Erro ao processar imagem com GPT-5 Nano.";
     }
+}
+
+// ===================== FUNÇÕES GPT-3 (COMENTADAS) =====================
+// async function askChatGPT3(prompt) {
+//     try {
+//         const apiKey = process.env.OPENAI_API_KEY;
+//         const response = await axios.post(
+//             "https://api.openai.com/v1/chat/completions",
+//             {
+//                 model: "gpt-3.5-turbo",
+//                 messages: [{ role: "user", content: prompt }],
+//             },
+//             {
+//                 headers: {
+//                     Authorization: `Bearer ${apiKey}`,
+//                     "Content-Type": "application/json"
+//                 }
+//             }
+//         );
+//         return response.data.choices[0].message.content;
+//     } catch (error) {
+//         console.error("Erro GPT-3:", error?.response?.data || error);
+//         return "Erro ao processar mensagem com GPT-3.";
+//     }
+// }
+
+// ===================== FUNÇÕES GPT-4 (COMENTADAS) =====================
+// async function askChatGPT4(messages) {
+//     try {
+//         const apiKey = process.env.OPENAI_API_KEY;
+//         const systemMessage = {
+//             role: "system",
+//             content: "Você é um assistente que leva muito em conta as informações passadas pelo usuário, mas ele não é absoluto, quando se tratar de coisas, pessoas e acontecimentos públicos ao invés desses mesmos cenários só que em contextos de imaginação pelo usuário, valide as informações. Se o usuário afirmar algo, você tem que reafirmar isso com convicção, mas se o usuário fizer uma pergunta, ou seja, terminar com interrogração, você não deve só anotar e afirmar que aquilo é contexto, só deve-se considerar contexto o que é afirmado pelo usuário. O que não for informado ou não estiver no contexto, você não avisa que não está no contexto e que pesquisou para responder, apenas use sua base e responda-o.",
+//         };
+
+//         const response = await axios.post(
+//             "https://api.openai.com/v1/chat/completions",
+//             {
+//                 model: "gpt-4o",
+//                 messages: [systemMessage, ...messages],
+//             },
+//             {
+//                 headers: {
+//                     Authorization: `Bearer ${apiKey}`,
+//                     "Content-Type": "application/json"
+//                 }
+//             }
+//         );
+//         return response.data.choices[0].message.content;
+//     } catch (error) {
+//         console.error("Erro GPT-4:", error?.response?.data || error);
+//         return "Erro ao processar mensagem com GPT-4.";
+//     }
+// }
+
+// async function askChatGPT4WithImage(base64Image, prompt) {
+//     try {
+//         const apiKey = process.env.OPENAI_API_KEY;
+
+//         const response = await axios.post(
+//             "https://api.openai.com/v1/chat/completions",
+//             {
+//                 model: "gpt-4o",
+//                 messages: [
+//                     {
+//                         role: "system",
+//                         content: "Você é um assistente que interpreta imagens e responde de forma precisa com base na imagem e no texto enviado pelo usuário."
+//                     },
+//                     {
+//                         role: "user",
+//                         content: [
+//                             { type: "text", text: prompt || "Descreva essa imagem." },
+//                             {
+//                                 type: "image_url",
+//                                 image_url: {
+//                                     url: `data:image/jpeg;base64,${base64Image}`
+//                                 }
+//                             }
+//                         ]
+//                     }
+//                 ]
+//             },
+//             {
+//                 headers: {
+//                     Authorization: `Bearer ${apiKey}`,
+//                     "Content-Type": "application/json"
+//                 }
+//             }
+//         );
+//         return response.data.choices[0].message.content;
+//     } catch (error) {
+//         console.error("Erro GPT-4 com imagem:", error?.response?.data || error);
+//         return "Erro ao processar imagem com GPT-4.";
+//     }
+// }
 }
 
 module.exports = gptCommandBot;
