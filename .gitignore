@@ -2,6 +2,8 @@ auth_info
 node_modules/
 levels_info/
 data/amigoSecreto/
+
+# Ignorar todos os tipos pesados
 *.mp3
 *.webm
 *.avi
@@ -11,5 +13,10 @@ data/amigoSecreto/
 *.m4a
 *.ogg
 *.wma
+
+# Exceto .mp3 na pasta assets
+!assets/
+!assets/*.mp3
+
 *.env
 *.log
