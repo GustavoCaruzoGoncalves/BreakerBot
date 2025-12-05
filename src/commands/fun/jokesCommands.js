@@ -15,27 +15,27 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     const messageType = Object.keys(msg.message)[0];
     const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
-    const poopNumber = process.env.POOP_NUMBER;
-    if (messageType === 'reactionMessage') {
-        const reactionSender = isGroup 
-            ? (msg.key.participantAlt || msg.key.remoteJid)
-            : msg.key.remoteJid;
-        
-        console.log(`[DEBUG POOP REAÇÃO] Reação detectada!`);
-        console.log(`[DEBUG POOP REAÇÃO] Sender: ${reactionSender}`);
-        console.log(`[DEBUG POOP REAÇÃO] Match: ${reactionSender.includes(poopNumber)}`);
-        
-        if (reactionSender.includes(poopNumber)) {
-            try {
-                await sock.sendMessage(chatId, {
-                    text: "💩"
-                });
-                console.log(`[DEBUG POOP REAÇÃO] Mensagem enviada com sucesso!`);
-            } catch (err) {
-                console.error(`[DEBUG POOP REAÇÃO] Erro ao enviar mensagem:`, err);
-            }
-        }
-    }
+    //const poopNumber = process.env.POOP_NUMBER;
+    //if (messageType === 'reactionMessage') {
+    //    const reactionSender = isGroup 
+    //        ? (msg.key.participantAlt || msg.key.remoteJid)
+    //        : msg.key.remoteJid;
+    //    
+    //    console.log(`[DEBUG POOP REAÇÃO] Reação detectada!`);
+    //    console.log(`[DEBUG POOP REAÇÃO] Sender: ${reactionSender}`);
+    //    console.log(`[DEBUG POOP REAÇÃO] Match: ${reactionSender.includes(poopNumber)}`);
+    //    
+    //    if (reactionSender.includes(poopNumber)) {
+    //        try {
+    //            await sock.sendMessage(chatId, {
+    //                text: "💩"
+    //            });
+    //            console.log(`[DEBUG POOP REAÇÃO] Mensagem enviada com sucesso!`);
+     //       } catch (err) {
+      //          console.error(`[DEBUG POOP REAÇÃO] Erro ao enviar mensagem:`, err);
+       //     }
+       // }
+   // }
 
     function getPushName(jid) {
         return mentionsController.getPushName(jid, contactsCache);
@@ -157,17 +157,57 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    const tomateNumber = process.env.TOMATE_NUMBER;
+//    const poopNumber = process.env.IGOR_NUMBER;
+//    console.log(`[DEBUG COCÔ] Sender: ${sender}`);
+//    console.log(`[DEBUG COCÔ] Esperado: ${poopNumber}@s.whatsapp.net`);
+//    console.log(`[DEBUG COCÔ] Match: ${sender === poopNumber + "@s.whatsapp.net"}`);
+//    console.log(`[DEBUG COCÔ] Sender includes: ${sender.includes(poopNumber)}`);
+//
+//    if (sender.includes(poopNumber)) {
+//        try {
+//            await sock.sendMessage(chatId, {
+//                react: {
+//                    text: "💩",
+//                    key: msg.key
+//                }
+//            });
+//            console.log(`[DEBUG COCO] Reação enviada com sucesso!`);
+//        } catch (err) {
+//            console.error(`[DEBUG COCO] Erro ao enviar reação:`, err);
+//        }
+//    }
+
+    const heartNumber = process.env.JOAO_NUMBER;
+    console.log(`[DEBUG CORAÇÃO] Sender: ${sender}`);
+    console.log(`[DEBUG CORAÇÃO] Esperado: ${heartNumber}@s.whatsapp.net`);
+    console.log(`[DEBUG CORAÇÃO] Match: ${sender === heartNumber + "@s.whatsapp.net"}`);
+    console.log(`[DEBUG CORAÇÃO] Sender includes: ${sender.includes(heartNumber)}`);
+
+    if (sender.includes(heartNumber)) {
+        try {
+            await sock.sendMessage(chatId, {
+                react: {
+                    text: "❤️",
+                    key: msg.key
+                }
+            });
+            console.log(`[DEBUG CORAÇÃO] Reação enviada com sucesso!`);
+        } catch (err) {
+            console.error(`[DEBUG CORAÇÃO] Erro ao enviar reação:`, err);
+        }
+    }
+
+    const tomateNumber = process.env.DUDA_NUMBER;
     console.log(`[DEBUG TOMATE] Sender: ${sender}`);
     console.log(`[DEBUG TOMATE] Esperado: ${tomateNumber}@s.whatsapp.net`);
     console.log(`[DEBUG TOMATE] Match: ${sender === tomateNumber + "@s.whatsapp.net"}`);
     console.log(`[DEBUG TOMATE] Sender includes: ${sender.includes(tomateNumber)}`);
-    
+
     if (sender.includes(tomateNumber)) {
         try {
             await sock.sendMessage(chatId, {
                 react: {
-                    text: "🍅",
+                    text: "🐈",
                     key: msg.key
                 }
             });
@@ -177,7 +217,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    const jegueNumber = process.env.JEGUE_NUMBER;
+    const jegueNumber = process.env.BRUNO_NUMBER;
     console.log(`[DEBUG JEGUE] Sender: ${sender}`);
     console.log(`[DEBUG JEGUE] Esperado: ${jegueNumber}@s.whatsapp.net`);
     console.log(`[DEBUG JEGUE] Match: ${sender === jegueNumber + "@s.whatsapp.net"}`);
@@ -194,6 +234,26 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             console.log(`[DEBUG JEGUE] Reação enviada com sucesso!`);
         } catch (err) {
             console.error(`[DEBUG JEGUE] Erro ao enviar reação:`, err);
+        }
+    }
+
+    const fogoNumber = process.env.SYNISTER_NUMBER;
+    console.log(`[DEBUG FOGO] Sender: ${sender}`);
+    console.log(`[DEBUG FOGO] Esperado: ${fogoNumber}@s.whatsapp.net`);
+    console.log(`[DEBUG FOGO] Match: ${sender === fogoNumber + "@s.whatsapp.net"}`);
+    console.log(`[DEBUG FOGO] Sender includes: ${sender.includes(fogoNumber)}`);
+
+    if (sender.includes(fogoNumber)) {
+        try {
+            await sock.sendMessage(chatId, {
+                react: {
+                    text: "🔥",
+                    key: msg.key
+                }
+            });
+            console.log(`[DEBUG FOGO] Reação enviada com sucesso!`);
+        } catch (err) {
+            console.error(`[DEBUG FOGO] Erro ao enviar reação:`, err);
         }
     }
 
@@ -524,6 +584,22 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             text: replyText,
             mentions: mentions,
         }, { quoted: msg });
+    }
+
+    if (textMessage.startsWith("!vumvum")) {
+        const audioPath = path.resolve(__dirname, '..', '..', '..', 'assets', 'vumvum.mp3');
+
+        if (fs.existsSync(audioPath)) {
+            await sock.sendMessage(chatId, {
+                audio: fs.readFileSync(audioPath),
+		mimetype: 'audio/mp4',
+                fileName: 'vumvum.mp3',
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(chatId, {
+                text: "❌ O áudio do VUMVUM não foi encontrado 😢",
+            }, { quoted: msg });
+        }
     }
 
 }
