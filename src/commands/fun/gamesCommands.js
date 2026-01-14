@@ -34,13 +34,13 @@ function clearPlayerGame(playerId) {
     playerGames.delete(playerId);
 }
 
-async function askZhipuQuiz() {
+async function askGptQuiz() {
     try {
-        const apiKey = process.env.ZHIPU_API_KEY;
+        const apiKey = process.env.OPENAI_API_KEY;
         const response = await axios.post(
-            "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            "https://api.openai.com/v1/chat/completions",
             {
-                model: "glm-4.5",
+                model: "gpt-5",
                 messages: [
                     {
                         role: "system",
@@ -61,12 +61,12 @@ async function askZhipuQuiz() {
         );
         return response.data.choices[0].message.content;
     } catch (error) {
-        console.error("Erro Zhipu GLM-4.5 com quiz:", error?.response?.data || error);
+        console.error("Erro GPT-5 com quiz:", error?.response?.data || error);
         return null;
     }
 }
 
-function parseZhipuQuizResponse(response) {
+function parseGptQuizResponse(response) {
     const questions = [];
     const lines = response.split('\n').filter(line => line.trim() !== '');
     
@@ -148,7 +148,7 @@ async function gamesCommandsBot(sock, { messages }) {
         
         await sendMessageWithRetry(sock, chatId, `${prefix}Bem-vindo ao jogo de trivia! Gerando perguntas com IA... ⏳`, mentions);
         
-        const aiResponse = await askZhipuQuiz();
+        const aiResponse = await askGptQuiz();
         
         if (!aiResponse) {
             await sendMessageWithRetry(sock, chatId, `${prefix}Erro ao gerar perguntas. Tente novamente mais tarde.`, mentions);
@@ -156,7 +156,7 @@ async function gamesCommandsBot(sock, { messages }) {
             return;
         }
         
-        playerGame.triviaQuestions = parseZhipuQuizResponse(aiResponse);
+        playerGame.triviaQuestions = parseGptQuizResponse(aiResponse);
         
         if (playerGame.triviaQuestions.length === 0) {
             await sendMessageWithRetry(sock, chatId, `${prefix}Erro ao processar perguntas. Tente novamente.`, mentions);

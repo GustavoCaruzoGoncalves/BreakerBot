@@ -257,6 +257,26 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
+    const hedgehogNumber = process.env.FULVIO_NUMBER;
+    console.log(`[DEBUG HEDGEHOG] Sender: ${sender}`);
+    console.log(`[DEBUG HEDGEHOG] Esperado: ${hedgehogNumber}@s.whatsapp.net`);
+    console.log(`[DEBUG HEDGEHOG] Match: ${sender === hedgehogNumber + "@s.whatsapp.net"}`);
+    console.log(`[DEBUG HEDGEHOG] Sender includes: ${sender.includes(hedgehogNumber)}`);
+
+    if (sender.includes(hedgehogNumber)) {
+        try {
+            await sock.sendMessage(chatId, {
+                react: {
+                    text: "🦔",
+                    key: msg.key
+                }
+            });
+            console.log(`[DEBUG HEDGEHOG] Reação enviada com sucesso!`);
+        } catch (err) {
+            console.error(`[DEBUG HEDGEHOG] Erro ao enviar reação:`, err);
+        }
+    }
+
     if (textMessage.startsWith("!gay")) {
         await handleCommand({
             command: "!gay",
