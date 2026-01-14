@@ -401,15 +401,26 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 let replyText;
                 
                 if (isSpecial) {
+                    const mentionInfo = mentionsController.processSingleMention(nameArgument, contactsCache);
                     replyText = `${process.env.PINTO_MESSAGE}`;
+
+                    await sock.sendMessage(chatId, {
+                        text: `${mentionInfo.mentionText}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK"`,
+                        mentions: mentionInfo.mentions,
+                    }, { quoted: msg });
+
+                    await sock.sendMessage(chatId, {
+                        text: replyText,
+                    }, { quoted: msg });
                 } else {
                     const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                     replyText = `${nameArgument} tem ${size}cm de pinto! 🍆`;
-                }
 
-                await sock.sendMessage(chatId, {
-                    text: replyText,
-                }, { quoted: msg });
+                    await sock.sendMessage(chatId, {
+                        text: replyText,
+                        mentions: mentionInfo.mentions,
+                    }, { quoted: msg });
+                }
             } else {
                 await sock.sendMessage(chatId, {
                     text: `Por favor, mencione um usuário ou forneça um nome com o comando !pinto nome.`,
