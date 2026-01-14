@@ -341,6 +341,71 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         });
     }
 
+    if (textMessage.startsWith("!pinto")) {
+        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
+        
+        // 1% de chance de dar 1000km
+        const isSpecial = Math.random() < 0.01;
+        
+        if (mentionedJid && mentionedJid.length > 0) {
+            const userToMention = mentionedJid[0];
+            const mentionInfo = mentionsController.processSingleMention(userToMention, contactsCache);
+            let replyText;
+            
+            if (isSpecial) {
+                replyText = `${mentionInfo.mentionText}! Caralho, esse aí cruzou de São Paulo ao Paraguai! Puta rola grande! 😂😂😂`;
+            } else {
+                const size = Math.floor(Math.random() * 41); // 0 a 40cm
+                replyText = `${mentionInfo.mentionText} tem ${size}cm de pinto! 🍆`;
+            }
+            
+            if (!mentionInfo.hasName && !mentionInfo.canMention) {
+                replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
+            }
+
+            await sock.sendMessage(chatId, {
+                text: replyText,
+                mentions: mentionInfo.mentions,
+            }, { quoted: msg });
+        } else {
+            const nameArgument = textMessage.slice(6).trim();
+
+            if (isSelfReference(nameArgument)) {
+                const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
+                let replyText;
+                
+                if (isSpecial) {
+                    replyText = `Você! Caralho, esse aí cruzou de São Paulo ao Paraguai! Puta rola grande! 😂😂😂`;
+                } else {
+                    const size = Math.floor(Math.random() * 41);
+                    replyText = `Você tem ${size}cm de pinto! 🍆`;
+                }
+
+                await sock.sendMessage(chatId, {
+                    text: replyText,
+                    mentions: mentionInfo.mentions,
+                }, { quoted: msg });
+            } else if (nameArgument) {
+                let replyText;
+                
+                if (isSpecial) {
+                    replyText = `${nameArgument}! ${process.env.PINTO_MESSAGE}`;
+                } else {
+                    const size = Math.floor(Math.random() * 41);
+                    replyText = `${nameArgument} tem ${size}cm de pinto! 🍆`;
+                }
+
+                await sock.sendMessage(chatId, {
+                    text: replyText,
+                }, { quoted: msg });
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: `Por favor, mencione um usuário ou forneça um nome com o comando !pinto nome.`,
+                }, { quoted: msg });
+            }
+        }
+    }
+
     function checkCumprimentoPedrao() {
         const cumprimentos = ["bom dia", "boa tarde", "boa noite"];
         const variacoesPedrao = ["perdao", "perdão", "pedrão", "pedrao"];
@@ -658,16 +723,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
             let botJids = [];
             try {
-                // Tentar obter o JID do bot de diferentes formas
                 if (sock.user?.id) {
                     const botId = sock.user.id;
-                    // Pode estar no formato "número:servidor" ou apenas "número"
                     const botNumber = botId.split(":")[0];
                     if (botNumber) {
                         botJids.push(botNumber + "@s.whatsapp.net");
                         botJids.push(botNumber + "@c.us");
                     }
-                    // Também adicionar o formato completo
                     if (botId.includes("@")) {
                         botJids.push(botId);
                     }
