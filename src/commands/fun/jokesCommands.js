@@ -344,7 +344,6 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     if (textMessage.startsWith("!pinto")) {
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
         
-        // 1% de chance de dar 1000km
         const isSpecial = Math.random() < 0.01;
         
         if (mentionedJid && mentionedJid.length > 0) {
@@ -355,7 +354,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             if (isSpecial) {
                 replyText = `${mentionInfo.mentionText}! Caralho, esse aí cruzou de São Paulo ao Paraguai! Puta rola grande! 😂😂😂`;
             } else {
-                const size = Math.floor(Math.random() * 41); // 0 a 40cm
+                const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                 replyText = `${mentionInfo.mentionText} tem ${size}cm de pinto! 🍆`;
             }
             
@@ -377,7 +376,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 if (isSpecial) {
                     replyText = `Você! Caralho, esse aí cruzou de São Paulo ao Paraguai! Puta rola grande! 😂😂😂`;
                 } else {
-                    const size = Math.floor(Math.random() * 41);
+                    const size = (Math.random() * 39.9 + 0.1).toFixed(1); // 0.1 a 40.0cm
                     replyText = `Você tem ${size}cm de pinto! 🍆`;
                 }
 
@@ -391,7 +390,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 if (isSpecial) {
                     replyText = `${nameArgument}! ${process.env.PINTO_MESSAGE}`;
                 } else {
-                    const size = Math.floor(Math.random() * 41);
+                    const size = (Math.random() * 39.9 + 0.1).toFixed(1); // 0.1 a 40.0cm
                     replyText = `${nameArgument} tem ${size}cm de pinto! 🍆`;
                 }
 
