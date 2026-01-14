@@ -352,20 +352,30 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             let replyText;
             
             if (isSpecial) {
-                replyText = `${process.env.PINTO_MESSAGE}`;
+                await sock.sendMessage(chatId, {
+                    text: `${mentionInfo.mentionText}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK`,
+                    mentions: mentionInfo.mentions,
+                }, { quoted: msg });
+                
+                if (process.env.PINTO_MESSAGE) {
+                    await sock.sendMessage(chatId, {
+                        text: process.env.PINTO_MESSAGE,
+                        mentions: mentionInfo.mentions,
+                    }, { quoted: msg });
+                }
             } else {
                 const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                 replyText = `${mentionInfo.mentionText} tem ${size}cm de pinto! 🍆`;
-            }
-            
-            if (!mentionInfo.hasName && !mentionInfo.canMention) {
-                replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
-            }
+                
+                if (!mentionInfo.hasName && !mentionInfo.canMention) {
+                    replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
+                }
 
-            await sock.sendMessage(chatId, {
-                text: replyText,
-                mentions: mentionInfo.mentions,
-            }, { quoted: msg });
+                await sock.sendMessage(chatId, {
+                    text: replyText,
+                    mentions: mentionInfo.mentions,
+                }, { quoted: msg });
+            }
         } else {
             const nameArgument = textMessage.slice(6).trim();
 
@@ -374,21 +384,18 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 
                 if (isSpecial) {
                     const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
-                    replyText = `${process.env.PINTO_MESSAGE}`;
                     
-                    if (!mentionInfo.hasName && !mentionInfo.canMention) {
-                        replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
+                    await sock.sendMessage(chatId, {
+                        text: `${mentionInfo.mentionText}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK`,
+                        mentions: mentionInfo.mentions,
+                    }, { quoted: msg });
+                    
+                    if (process.env.PINTO_MESSAGE) {
+                        await sock.sendMessage(chatId, {
+                            text: process.env.PINTO_MESSAGE,
+                            mentions: mentionInfo.mentions,
+                        }, { quoted: msg });
                     }
-
-                    await sock.sendMessage(chatId, {
-                        text: `${mentionInfo.mentionText}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK"`,
-                        mentions: mentionInfo.mentions,
-                    }, { quoted: msg });
-
-                    await sock.sendMessage(chatId, {
-                        text: replyText,
-                        mentions: mentionInfo.mentions,
-                    }, { quoted: msg });
                 } else {
                     const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                     replyText = `Você tem ${size}cm de pinto! 🍆`;
@@ -401,24 +408,21 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 let replyText;
                 
                 if (isSpecial) {
-                    const mentionInfo = mentionsController.processSingleMention(nameArgument, contactsCache);
-                    replyText = `${process.env.PINTO_MESSAGE}`;
-
                     await sock.sendMessage(chatId, {
-                        text: `${mentionInfo.mentionText}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK"`,
-                        mentions: mentionInfo.mentions,
+                        text: `${nameArgument}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK`,
                     }, { quoted: msg });
-
-                    await sock.sendMessage(chatId, {
-                        text: replyText,
-                    }, { quoted: msg });
+                    
+                    if (process.env.PINTO_MESSAGE) {
+                        await sock.sendMessage(chatId, {
+                            text: process.env.PINTO_MESSAGE,
+                        }, { quoted: msg });
+                    }
                 } else {
                     const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                     replyText = `${nameArgument} tem ${size}cm de pinto! 🍆`;
 
                     await sock.sendMessage(chatId, {
                         text: replyText,
-                        mentions: mentionInfo.mentions,
                     }, { quoted: msg });
                 }
             } else {
