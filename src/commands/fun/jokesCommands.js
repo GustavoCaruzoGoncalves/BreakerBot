@@ -370,24 +370,28 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             const nameArgument = textMessage.slice(6).trim();
 
             if (isSelfReference(nameArgument)) {
-                const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
                 let replyText;
                 
                 if (isSpecial) {
+                    const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
                     replyText = `${mentionInfo.mentionText}! ${process.env.PINTO_MESSAGE || 'Caralho, esse aí cruzou de São Paulo ao Paraguai! Puta rola grande! 😂😂😂'}`;
+                    
+                    if (!mentionInfo.hasName && !mentionInfo.canMention) {
+                        replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
+                    }
+
+                    await sock.sendMessage(chatId, {
+                        text: replyText,
+                        mentions: mentionInfo.mentions,
+                    }, { quoted: msg });
                 } else {
                     const size = (Math.random() * 39.9 + 0.1).toFixed(1); // 0.1 a 40.0cm
-                    replyText = `${mentionInfo.mentionText} tem ${size}cm de pinto! 🍆`;
-                }
+                    replyText = `Você tem ${size}cm de pinto! 🍆`;
 
-                if (!mentionInfo.hasName && !mentionInfo.canMention) {
-                    replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
+                    await sock.sendMessage(chatId, {
+                        text: replyText,
+                    }, { quoted: msg });
                 }
-
-                await sock.sendMessage(chatId, {
-                    text: replyText,
-                    mentions: mentionInfo.mentions,
-                }, { quoted: msg });
             } else if (nameArgument) {
                 let replyText;
                 
