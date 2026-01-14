@@ -352,7 +352,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             let replyText;
             
             if (isSpecial) {
-                replyText = `${mentionInfo.mentionText}! ${process.env.PINTO_MESSAGE}`;
+                replyText = `${process.env.PINTO_MESSAGE}`;
             } else {
                 const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                 replyText = `${mentionInfo.mentionText} tem ${size}cm de pinto! 🍆`;
@@ -374,7 +374,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 
                 if (isSpecial) {
                     const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
-                    replyText = `${mentionInfo.mentionText}! ${process.env.PINTO_MESSAGE}`;
+                    replyText = `${process.env.PINTO_MESSAGE}`;
                     
                     if (!mentionInfo.hasName && !mentionInfo.canMention) {
                         replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
