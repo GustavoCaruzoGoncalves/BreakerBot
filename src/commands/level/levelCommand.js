@@ -847,7 +847,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!ranking")) {
+    if (textMessage.startsWith("!ranking") && !textMessage.startsWith("!rankingGay")) {
         const ranking = levelSystem.getRanking(10);
         
         let rankingMessage = `🏆 *Ranking Top 10* 🏆\n\n`;

@@ -333,6 +333,14 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         });
     }
 
+    if (textMessage.startsWith("!burro")) {
+        await handleCommand({
+            command: "!burro",
+            emoji: "🫏🫏🫏",
+            customText: "burro"
+        });
+    }
+
     function checkCumprimentoPedrao() {
         const cumprimentos = ["bom dia", "boa tarde", "boa noite"];
         const variacoesPedrao = ["perdao", "perdão", "pedrão", "pedrao"];
@@ -618,6 +626,79 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         } else {
             await sock.sendMessage(chatId, {
                 text: "❌ O áudio do VUMVUM não foi encontrado 😢",
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage.startsWith("!rankingGay")) {
+        if (!isGroup) {
+            await sock.sendMessage(chatId, {
+                text: "❌ Este comando só funciona em grupos!",
+            }, { quoted: msg });
+            return;
+        }
+
+        try {
+            const groupMetadata = await sock.groupMetadata(chatId);
+            const participants = groupMetadata.participants || [];
+            
+            if (participants.length < 3) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ O grupo precisa ter pelo menos 3 membros para fazer o ranking!",
+                }, { quoted: msg });
+                return;
+            }
+
+            let botNumber = null;
+            try {
+                botNumber = (sock.user?.id || '').split(":")[0];
+                if (botNumber) {
+                    botNumber = botNumber + "@s.whatsapp.net";
+                }
+            } catch (error) {
+                console.error('Erro ao obter botNumber:', error);
+            }
+            
+            const validParticipants = participants
+                .map(p => p.id)
+                .filter(jid => {
+                    if (jid.includes('@g.us')) return false;
+                    if (botNumber && jid === botNumber) return false;
+                    return true;
+                });
+
+            if (validParticipants.length < 3) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Não há participantes suficientes para fazer o ranking!",
+                }, { quoted: msg });
+                return;
+            }
+
+            const shuffled = [...validParticipants].sort(() => Math.random() - 0.5);
+            const selected = shuffled.slice(0, 3);
+
+            const messages = [
+                process.env.RANKING_GAY_MESSAGE_1,
+                process.env.RANKING_GAY_MESSAGE_2,
+                process.env.RANKING_GAY_MESSAGE_3
+            ];
+
+            for (let i = 0; i < selected.length; i++) {
+                const userJid = selected[i];
+                const mentionInfo = mentionsController.processSingleMention(userJid, contactsCache);
+                
+                await sock.sendMessage(chatId, {
+                    text: `${mentionInfo.mentionText}! ${messages[i]}`,
+                    mentions: mentionInfo.mentions,
+                }, { quoted: msg });
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+        } catch (error) {
+            console.error('Erro ao executar !rankingGay:', error);
+            await sock.sendMessage(chatId, {
+                text: "❌ Erro ao gerar o ranking. Tente novamente!",
             }, { quoted: msg });
         }
     }
