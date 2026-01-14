@@ -639,8 +639,15 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
 
         try {
+            console.log('========== DEBUG !rankingGay ==========');
             const groupMetadata = await sock.groupMetadata(chatId);
             const participants = groupMetadata.participants || [];
+            
+            console.log(`[DEBUG] Total de participantes no grupo: ${participants.length}`);
+            console.log('[DEBUG] Todos os participantes:');
+            participants.forEach((p, index) => {
+                console.log(`  ${index + 1}. ${p.id} (admin: ${p.admin || false})`);
+            });
             
             if (participants.length < 3) {
                 await sock.sendMessage(chatId, {
@@ -649,12 +656,26 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            let botNumber = null;
+            let botJids = [];
             try {
-                botNumber = (sock.user?.id || '').split(":")[0];
-                if (botNumber) {
-                    botNumber = botNumber + "@s.whatsapp.net";
+                // Tentar obter o JID do bot de diferentes formas
+                if (sock.user?.id) {
+                    const botId = sock.user.id;
+                    // Pode estar no formato "número:servidor" ou apenas "número"
+                    const botNumber = botId.split(":")[0];
+                    if (botNumber) {
+                        botJids.push(botNumber + "@s.whatsapp.net");
+                        botJids.push(botNumber + "@c.us");
+                    }
+                    // Também adicionar o formato completo
+                    if (botId.includes("@")) {
+                        botJids.push(botId);
+                    }
                 }
+                if (sock.user?.jid) {
+                    botJids.push(sock.user.jid);
+                }
+                console.log(`[DEBUG] Bot JIDs identificados: ${JSON.stringify(botJids)}`);
             } catch (error) {
                 console.error('Erro ao obter botNumber:', error);
             }
@@ -662,10 +683,29 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             const validParticipants = participants
                 .map(p => p.id)
                 .filter(jid => {
-                    if (jid.includes('@g.us')) return false;
-                    if (botNumber && jid === botNumber) return false;
+                    if (jid.includes('@g.us')) {
+                        console.log(`[DEBUG] Filtrado (é grupo): ${jid}`);
+                        return false;
+                    }
+                    const isBot = botJids.some(botJid => {
+                        if (jid === botJid) return true;
+                        const jidNumber = jid.split("@")[0].split(":")[0];
+                        const botNumber = botJid.split("@")[0].split(":")[0];
+                        if (jidNumber === botNumber) return true;
+                        return false;
+                    });
+                    if (isBot) {
+                        console.log(`[DEBUG] Filtrado (é o bot): ${jid}`);
+                        return false;
+                    }
                     return true;
                 });
+
+            console.log(`[DEBUG] Participantes válidos após filtrar: ${validParticipants.length}`);
+            console.log('[DEBUG] Lista de participantes válidos:');
+            validParticipants.forEach((jid, index) => {
+                console.log(`  ${index + 1}. ${jid}`);
+            });
 
             if (validParticipants.length < 3) {
                 await sock.sendMessage(chatId, {
@@ -676,6 +716,12 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
             const shuffled = [...validParticipants].sort(() => Math.random() - 0.5);
             const selected = shuffled.slice(0, 3);
+            
+            console.log('[DEBUG] 3 participantes selecionados aleatoriamente:');
+            selected.forEach((jid, index) => {
+                console.log(`  ${index + 1}. ${jid}`);
+            });
+            console.log('========================================');
 
             const messages = [
                 process.env.RANKING_GAY_MESSAGE_1,
@@ -686,6 +732,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             for (let i = 0; i < selected.length; i++) {
                 const userJid = selected[i];
                 const mentionInfo = mentionsController.processSingleMention(userJid, contactsCache);
+                
+                console.log(`[DEBUG] Enviando mensagem ${i + 1} para: ${userJid} (${mentionInfo.mentionText})`);
                 
                 await sock.sendMessage(chatId, {
                     text: `${mentionInfo.mentionText}! ${messages[i]}`,
