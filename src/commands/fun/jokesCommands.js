@@ -381,11 +381,16 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                     }
 
                     await sock.sendMessage(chatId, {
+                        text: `${mentionInfo.mentionText}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK"`,
+                        mentions: mentionInfo.mentions,
+                    }, { quoted: msg });
+
+                    await sock.sendMessage(chatId, {
                         text: replyText,
                         mentions: mentionInfo.mentions,
                     }, { quoted: msg });
                 } else {
-                    const size = (Math.random() * 39.9 + 0.1).toFixed(1); // 0.1 a 40.0cm
+                    const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                     replyText = `Você tem ${size}cm de pinto! 🍆`;
 
                     await sock.sendMessage(chatId, {
@@ -396,9 +401,9 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 let replyText;
                 
                 if (isSpecial) {
-                    replyText = `${nameArgument}! ${process.env.PINTO_MESSAGE}`;
+                    replyText = `${process.env.PINTO_MESSAGE}`;
                 } else {
-                    const size = (Math.random() * 39.9 + 0.1).toFixed(1); // 0.1 a 40.0cm
+                    const size = (Math.random() * 39.9 + 0.1).toFixed(1);
                     replyText = `${nameArgument} tem ${size}cm de pinto! 🍆`;
                 }
 
