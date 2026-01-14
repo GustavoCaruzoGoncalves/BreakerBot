@@ -374,7 +374,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 
                 if (isSpecial) {
                     const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
-                    replyText = `${mentionInfo.mentionText}! ${process.env.PINTO_MESSAGE || 'Caralho, esse aí cruzou de São Paulo ao Paraguai! Puta rola grande! 😂😂😂'}`;
+                    replyText = `${mentionInfo.mentionText}! ${process.env.PINTO_MESSAGE}`;
                     
                     if (!mentionInfo.hasName && !mentionInfo.canMention) {
                         replyText += `\n\n💡 Dica: os usuários precisam enviar alguma mensagem para que seus nomes apareçam quando as menções estão desativadas, ou podem adicionar um nome personalizado para que assim possam ser chamados`;
