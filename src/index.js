@@ -3,6 +3,8 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
 
+const { startAuthMessageProcessor } = require('./services/authMessageSender');
+
 const imagesCommandsBot = require('./commands/media/imagesCommands');
 const audioCommandsBot = require('./commands/media/audioCommands');
 const jokesCommandsBot = require('./commands/fun/jokesCommands');
@@ -83,7 +85,8 @@ async function connectBot() {
                     console.log("Sessão inválida. Delete a pasta auth_info e reconecte via QR Code.");
                 }
             } else if (connection === 'open') {
-                console.log("✅ Bot conectado com sucesso!");
+                console.log("Bot conectado com sucesso!");
+                startAuthMessageProcessor(sock);
             }
         });        
 

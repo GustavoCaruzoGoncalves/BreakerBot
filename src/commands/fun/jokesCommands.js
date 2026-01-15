@@ -3,6 +3,19 @@ const fs = require('fs');
 const mentionsController = require('../../controllers/mentionsController');
 const { admins } = require('../../config/adm');
 
+const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
+
+function loadUsersData() {
+    try {
+        if (fs.existsSync(USERS_FILE)) {
+            return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+        }
+    } catch (error) {
+        console.error('[EMOJI REACTION] Erro ao carregar users.json:', error);
+    }
+    return {};
+}
+
 async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
@@ -157,123 +170,37 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-//    const poopNumber = process.env.IGOR_NUMBER;
-//    console.log(`[DEBUG COCÔ] Sender: ${sender}`);
-//    console.log(`[DEBUG COCÔ] Esperado: ${poopNumber}@s.whatsapp.net`);
-//    console.log(`[DEBUG COCÔ] Match: ${sender === poopNumber + "@s.whatsapp.net"}`);
-//    console.log(`[DEBUG COCÔ] Sender includes: ${sender.includes(poopNumber)}`);
-//
-//    if (sender.includes(poopNumber)) {
-//        try {
-//            await sock.sendMessage(chatId, {
-//                react: {
-//                    text: "💩",
-//                    key: msg.key
-//                }
-//            });
-//            console.log(`[DEBUG COCO] Reação enviada com sucesso!`);
-//        } catch (err) {
-//            console.error(`[DEBUG COCO] Erro ao enviar reação:`, err);
-//        }
-//    }
-
-    const heartNumber = process.env.JOAO_NUMBER;
-    console.log(`[DEBUG CORAÇÃO] Sender: ${sender}`);
-    console.log(`[DEBUG CORAÇÃO] Esperado: ${heartNumber}@s.whatsapp.net`);
-    console.log(`[DEBUG CORAÇÃO] Match: ${sender === heartNumber + "@s.whatsapp.net"}`);
-    console.log(`[DEBUG CORAÇÃO] Sender includes: ${sender.includes(heartNumber)}`);
-
-    if (sender.includes(heartNumber)) {
-        try {
-            await sock.sendMessage(chatId, {
-                react: {
-                    text: "❤️",
-                    key: msg.key
-                }
-            });
-            console.log(`[DEBUG CORAÇÃO] Reação enviada com sucesso!`);
-        } catch (err) {
-            console.error(`[DEBUG CORAÇÃO] Erro ao enviar reação:`, err);
-        }
-    }
-
-    const tomateNumber = process.env.DUDA_NUMBER;
-    console.log(`[DEBUG TOMATE] Sender: ${sender}`);
-    console.log(`[DEBUG TOMATE] Esperado: ${tomateNumber}@s.whatsapp.net`);
-    console.log(`[DEBUG TOMATE] Match: ${sender === tomateNumber + "@s.whatsapp.net"}`);
-    console.log(`[DEBUG TOMATE] Sender includes: ${sender.includes(tomateNumber)}`);
-
-    if (sender.includes(tomateNumber)) {
-        try {
-            await sock.sendMessage(chatId, {
-                react: {
-                    text: "🐈",
-                    key: msg.key
-                }
-            });
-            console.log(`[DEBUG TOMATE] Reação enviada com sucesso!`);
-        } catch (err) {
-            console.error(`[DEBUG TOMATE] Erro ao enviar reação:`, err);
-        }
-    }
-
-    const jegueNumber = process.env.BRUNO_NUMBER;
-    console.log(`[DEBUG JEGUE] Sender: ${sender}`);
-    console.log(`[DEBUG JEGUE] Esperado: ${jegueNumber}@s.whatsapp.net`);
-    console.log(`[DEBUG JEGUE] Match: ${sender === jegueNumber + "@s.whatsapp.net"}`);
-    console.log(`[DEBUG JEGUE] Sender includes: ${sender.includes(jegueNumber)}`);
+    // Verifica reação de emoji personalizada do usuário
+    const usersData = loadUsersData();
     
-    if (sender.includes(jegueNumber)) {
-        try {
-            await sock.sendMessage(chatId, {
-                react: {
-                    text: "🫏",
-                    key: msg.key
-                }
-            });
-            console.log(`[DEBUG JEGUE] Reação enviada com sucesso!`);
-        } catch (err) {
-            console.error(`[DEBUG JEGUE] Erro ao enviar reação:`, err);
+    // Busca o usuário pelo sender ou pelo jid associado
+    let userEmojiConfig = null;
+    
+    // Primeiro tenta encontrar diretamente pelo sender
+    if (usersData[sender]) {
+        userEmojiConfig = usersData[sender];
+    } else {
+        // Se não encontrar, busca por usuário que tenha o sender como jid
+        for (const [key, userData] of Object.entries(usersData)) {
+            if (userData.jid === sender) {
+                userEmojiConfig = userData;
+                break;
+            }
         }
     }
-
-    const fogoNumber = process.env.SYNISTER_NUMBER;
-    console.log(`[DEBUG FOGO] Sender: ${sender}`);
-    console.log(`[DEBUG FOGO] Esperado: ${fogoNumber}@s.whatsapp.net`);
-    console.log(`[DEBUG FOGO] Match: ${sender === fogoNumber + "@s.whatsapp.net"}`);
-    console.log(`[DEBUG FOGO] Sender includes: ${sender.includes(fogoNumber)}`);
-
-    if (sender.includes(fogoNumber)) {
+    
+    // Se o usuário tem emojiReaction ativado e um emoji configurado, envia a reação
+    if (userEmojiConfig && userEmojiConfig.emojiReaction && userEmojiConfig.emoji) {
         try {
             await sock.sendMessage(chatId, {
                 react: {
-                    text: "🔥",
+                    text: userEmojiConfig.emoji,
                     key: msg.key
                 }
             });
-            console.log(`[DEBUG FOGO] Reação enviada com sucesso!`);
+            console.log(`[EMOJI REACTION] Reação ${userEmojiConfig.emoji} enviada para ${sender}`);
         } catch (err) {
-            console.error(`[DEBUG FOGO] Erro ao enviar reação:`, err);
-        }
-    }
-
-    const hedgehogNumber = process.env.FULVIO_NUMBER;
-    console.log(`[DEBUG HEDGEHOG] Sender: ${sender}`);
-    console.log(`[DEBUG HEDGEHOG] Esperado: ${hedgehogNumber}@s.whatsapp.net`);
-    console.log(`[DEBUG HEDGEHOG] Match: ${sender === hedgehogNumber + "@s.whatsapp.net"}`);
-    console.log(`[DEBUG HEDGEHOG] Sender includes: ${sender.includes(hedgehogNumber)}`);
-
-    if (sender.includes(hedgehogNumber)) {
-        try {
-            await sock.sendMessage(chatId, {
-                react: {
-                    text: "🦔",
-                    key: msg.key
-                }
-            });
-            console.log(`[DEBUG HEDGEHOG] Reação enviada com sucesso!`);
-        } catch (err) {
-            console.error(`[DEBUG HEDGEHOG] Erro ao enviar reação:`, err);
+            console.error(`[EMOJI REACTION] Erro ao enviar reação:`, err);
         }
     }
 

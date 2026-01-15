@@ -858,7 +858,8 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         
         for (let i = 0; i < ranking.length; i++) {
             const user = ranking[i];
-            const mentionInfo = mentionsController.processSingleMention(user.userId, contactsCache);
+            const userJidForMention = user.jid || user.userId;
+            const mentionInfo = mentionsController.processSingleMention(userJidForMention, contactsCache);
             mentionTexts.push(mentionInfo.mentionText);
             if (mentionInfo.mentions.length > 0) {
                 mentions.push(...mentionInfo.mentions);

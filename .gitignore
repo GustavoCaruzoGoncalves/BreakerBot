@@ -1,7 +1,14 @@
 auth_info
 node_modules/
+
+# Dados de usuários e níveis
 levels_info/
+
+# Dados sensíveis da aplicação
+data/auth/
 data/amigoSecreto/
+data/mentions/
+data/backup/
 
 # Ignorar todos os tipos pesados
 *.mp3
@@ -18,5 +25,12 @@ data/amigoSecreto/
 !assets/
 !assets/*.mp3
 
+# Variáveis de ambiente e logs
 *.env
+.env*
 *.log
+
+# Arquivos de sessão do WhatsApp
+*.db
+*.db-shm
+*.db-wal

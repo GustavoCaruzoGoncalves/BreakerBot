@@ -6,9 +6,13 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
-    "server": "pm2 start src/index.js --name BreakerBot",
-    "stop": "pm2 stop BreakerBot",
-    "restart": "npm stop && npm run server"
+    "start:api": "node src/api/server.js",
+    "dev": "concurrently --names \"BOT,API\" --prefix-colors \"green,blue\" \"npm run start\" \"npm run start:api\"",
+    "startwapi": "concurrently --names \"BOT,API\" --prefix-colors \"green,blue\" \"npm run start\" \"npm run start:api\"",
+    "server": "pm2 start src/index.js --name BreakerBot --env production && pm2 start src/api/server.js --name BreakerBotAPI --env production",
+    "stop": "pm2 stop BreakerBot BreakerBotAPI",
+    "restart": "pm2 restart BreakerBot BreakerBotAPI",
+    "logs": "pm2 logs"
   },
   "keywords": [],
   "author": "",
@@ -19,7 +23,10 @@
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "axios": "^1.8.3",
     "child_process": "^1.0.2",
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "express": "^4.21.2",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.3",
     "fs": "^0.0.1-security",
