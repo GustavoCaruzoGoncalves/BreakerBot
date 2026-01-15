@@ -8,32 +8,40 @@ const app = express();
 const PORT = process.env.API_PORT || 3001;
 const HOST = process.env.API_HOST || '0.0.0.0';
 
-// Configuração de CORS para produção
+const getAllowedOrigins = () => {
+    if (process.env.CORS_ORIGINS) {
+        return process.env.CORS_ORIGINS.split(',').map(o => o.trim());
+    }
+    return ['http://localhost:3000', 'http://localhost:3001'];
+};
+
 const corsOptions = {
     origin: function (origin, callback) {
-        // Permite requisições sem origin (apps mobile, Postman, etc)
         if (!origin) return callback(null, true);
         
-        const allowedOrigins = process.env.CORS_ORIGINS 
-            ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
-            : ['http://localhost:3000', 'http://localhost:3001'];
+        const allowedOrigins = getAllowedOrigins();
         
-        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+        if (allowedOrigins.includes('*')) {
+            return callback(null, true);
+        }
+        
+        if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            console.log(`[CORS] Origem bloqueada: ${origin}`);
-            callback(new Error('Não permitido pelo CORS'));
+            console.log(`[CORS] Origem não permitida: ${origin}`);
+            callback(null, false);
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
 app.use(cors(corsOptions));
+
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
-// Trust proxy para funcionar atrás de nginx/reverse proxy
 app.set('trust proxy', 1);
 
 const USERS_FILE = path.join(__dirname, '..', '..', 'levels_info', 'users.json');
@@ -104,7 +112,6 @@ const formatUserId = (id) => {
     return `${formattedId}@s.whatsapp.net`;
 };
 
-// Funções de cálculo de XP (mesma lógica do levelCommand.js)
 const getRequiredXP = (level) => {
     if (level < 10) {
         return 100 + (level - 1) * 10;
@@ -116,19 +123,15 @@ const getRequiredXP = (level) => {
 const calculateUserProgress = (user) => {
     if (!user || !user.level) return null;
     
-    // Calcula XP total necessário para chegar ao nível atual
     let totalXPNeeded = 0;
     for (let i = 1; i < user.level; i++) {
         totalXPNeeded += getRequiredXP(i);
     }
     
-    // XP necessário para o próximo nível
     const nextLevelXP = getRequiredXP(user.level);
     
-    // XP atual no nível (progresso)
     const progressXP = Math.max(0, (user.xp || 0) - totalXPNeeded);
     
-    // XP que falta para subir de nível
     const neededXP = Math.max(0, nextLevelXP - progressXP);
     
     return {
@@ -1005,7 +1008,6 @@ app.get('/api/amigo-secreto/user/:id', (req, res) => {
             const userIdInGroup = data.participantes?.find(p => userIds.includes(p));
             
             if (userIdInGroup) {
-                // Encontrar quem o usuário tirou no sorteio
                 let amigoSorteado = null;
                 let presenteDoAmigo = null;
                 let nomeDoAmigo = null;
@@ -1016,7 +1018,6 @@ app.get('/api/amigo-secreto/user/:id', (req, res) => {
                     nomeDoAmigo = data.nomes?.[amigoSorteado] || amigoSorteado.split('@')[0];
                 }
 
-                // Montar lista de participantes com nomes e presentes
                 const participantesDetalhados = (data.participantes || []).map(p => ({
                     id: p,
                     nome: data.nomes?.[p] || p.split('@')[0],
@@ -1058,6 +1059,100 @@ app.get('/api/amigo-secreto/user/:id', (req, res) => {
         });
     } catch (error) {
         console.error('Erro ao buscar grupos do usuário:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erro interno do servidor'
+        });
+    }
+});
+
+app.patch('/api/amigo-secreto/:groupId/presente', (req, res) => {
+    try {
+        const { groupId } = req.params;
+        const { odI, presente } = req.body;
+
+        if (!odI || presente === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'userId e presente são obrigatórios'
+            });
+        }
+
+        let userIdFormatado = odI.trim();
+        if (!userIdFormatado.includes('@')) {
+            userIdFormatado = `${userIdFormatado}@s.whatsapp.net`;
+        }
+
+        const amigoSecreto = readJsonFile(AMIGO_SECRETO_FILE);
+
+        if (!amigoSecreto) {
+            return res.status(500).json({
+                success: false,
+                message: 'Erro ao ler arquivo do amigo secreto'
+            });
+        }
+
+        if (!amigoSecreto[groupId]) {
+            return res.status(404).json({
+                success: false,
+                message: 'Grupo não encontrado'
+            });
+        }
+
+        const group = amigoSecreto[groupId];
+        const users = readJsonFile(USERS_FILE);
+        
+        let participantId = null;
+        
+        if (group.participantes.includes(userIdFormatado)) {
+            participantId = userIdFormatado;
+        } else {
+            for (const pId of group.participantes) {
+                if (users && users[pId]?.jid === userIdFormatado) {
+                    participantId = pId;
+                    break;
+                }
+                if (users && users[userIdFormatado]?.jid === pId) {
+                    participantId = pId;
+                    break;
+                }
+            }
+        }
+
+        if (!participantId) {
+            return res.status(404).json({
+                success: false,
+                message: 'Usuário não é participante deste grupo'
+            });
+        }
+
+        if (!group.presentes) {
+            group.presentes = {};
+        }
+
+        if (presente.trim() === '') {
+            delete group.presentes[participantId];
+        } else {
+            group.presentes[participantId] = presente.trim();
+        }
+
+        if (!writeJsonFile(AMIGO_SECRETO_FILE, amigoSecreto)) {
+            return res.status(500).json({
+                success: false,
+                message: 'Erro ao salvar presente'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Presente atualizado com sucesso',
+            groupId: groupId,
+            odI: participantId,
+            presente: presente.trim() || null
+        });
+
+    } catch (error) {
+        console.error('Erro ao atualizar presente:', error);
         res.status(500).json({
             success: false,
             message: 'Erro interno do servidor'
@@ -1109,7 +1204,8 @@ app.get('/', (req, res) => {
             },
             amigoSecreto: {
                 'GET /api/amigo-secreto': 'Lista todos os grupos de amigo secreto',
-                'GET /api/amigo-secreto/user/:id': 'Lista grupos do usuário (aceita @s.whatsapp.net ou @lid)'
+                'GET /api/amigo-secreto/user/:id': 'Lista grupos do usuário (aceita @s.whatsapp.net ou @lid)',
+                'PATCH /api/amigo-secreto/:groupId/presente': 'Atualiza presente desejado do usuário no grupo'
             },
             health: {
                 'GET /api/health': 'Status da API'
