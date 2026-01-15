@@ -8,7 +8,7 @@ levels_info/
 data/auth/
 data/amigoSecreto/
 data/mentions/
-data/backup/
+data/backups/
 
 # Ignorar todos os tipos pesados
 *.mp3
