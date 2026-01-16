@@ -32,7 +32,7 @@ const writeJsonFile = (filePath, data) => {
 
 const isSocketReady = (sock) => {
     try {
-        return sock && sock.user && sock.ws && sock.ws.readyState === 1;
+        return sock && sock.user && typeof sock.sendMessage === 'function';
     } catch {
         return false;
     }
