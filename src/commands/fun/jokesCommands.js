@@ -633,6 +633,154 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
+    if (textMessage.startsWith("!transar")) {
+        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const inputText = textMessage.slice(8).trim();
+        
+        if (!inputText && mentionedJid.length === 0) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: !transar João e Maria ou !transar eu e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        let name1 = "";
+        let name2 = "";
+        let mentions = [];
+        let mentionIndex = 0;
+
+        if (inputText.toLowerCase().includes(" e ")) {
+            const parts = inputText.split(/ e /i);
+            name1 = parts[0].trim();
+            name2 = parts.slice(1).join(" e ").trim();
+        } else if (inputText.includes(" ")) {
+            const spaceIndex = inputText.indexOf(" ");
+            name1 = inputText.slice(0, spaceIndex).trim();
+            name2 = inputText.slice(spaceIndex + 1).trim();
+        } else if (mentionedJid.length === 2) {
+            const mentionInfo1 = mentionsController.processSingleMention(mentionedJid[0], contactsCache);
+            const mentionInfo2 = mentionsController.processSingleMention(mentionedJid[1], contactsCache);
+            name1 = mentionInfo1.mentionText;
+            name2 = mentionInfo2.mentionText;
+            mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
+        } else if (inputText && mentionedJid.length === 0) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: !transar João e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        const processName = (name) => {
+            const lowerName = name.toLowerCase().trim();
+            if (lowerName === "eu" || lowerName === "me") {
+                return "Você";
+            }
+            
+            if (name.includes("@") && mentionedJid.length > mentionIndex) {
+                const mentionInfo = mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
+                mentions.push(...mentionInfo.mentions);
+                mentionIndex++;
+                return mentionInfo.mentionText;
+            }
+            
+            return name;
+        };
+
+        if (name1 && name2) {
+            name1 = processName(name1);
+            name2 = processName(name2);
+        }
+
+        if (!name1 || !name2) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, forneça dois nomes.\nExemplo: !transar João e Maria ou !transar eu e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        const percentage = Math.floor(Math.random() * 101);
+        const replyText = `${name1} e ${name2} tem ${percentage}% de chance de transarem! 🔥🔥🔥`;
+
+        await sock.sendMessage(chatId, {
+            text: replyText,
+            mentions: mentions,
+        }, { quoted: msg });
+    }
+
+    if (textMessage.startsWith("!arrebentar")) {
+        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const inputText = textMessage.slice(11).trim();
+        
+        if (!inputText && mentionedJid.length === 0) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: !arrebentar João e Maria ou !arrebentar eu e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        let name1 = "";
+        let name2 = "";
+        let mentions = [];
+        let mentionIndex = 0;
+
+        if (inputText.toLowerCase().includes(" e ")) {
+            const parts = inputText.split(/ e /i);
+            name1 = parts[0].trim();
+            name2 = parts.slice(1).join(" e ").trim();
+        } else if (inputText.includes(" ")) {
+            const spaceIndex = inputText.indexOf(" ");
+            name1 = inputText.slice(0, spaceIndex).trim();
+            name2 = inputText.slice(spaceIndex + 1).trim();
+        } else if (mentionedJid.length === 2) {
+            const mentionInfo1 = mentionsController.processSingleMention(mentionedJid[0], contactsCache);
+            const mentionInfo2 = mentionsController.processSingleMention(mentionedJid[1], contactsCache);
+            name1 = mentionInfo1.mentionText;
+            name2 = mentionInfo2.mentionText;
+            mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
+        } else if (inputText && mentionedJid.length === 0) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: !arrebentar João e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        const processName = (name) => {
+            const lowerName = name.toLowerCase().trim();
+            if (lowerName === "eu" || lowerName === "me") {
+                return "Você";
+            }
+            
+            if (name.includes("@") && mentionedJid.length > mentionIndex) {
+                const mentionInfo = mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
+                mentions.push(...mentionInfo.mentions);
+                mentionIndex++;
+                return mentionInfo.mentionText;
+            }
+            
+            return name;
+        };
+
+        if (name1 && name2) {
+            name1 = processName(name1);
+            name2 = processName(name2);
+        }
+
+        if (!name1 || !name2) {
+            await sock.sendMessage(chatId, {
+                text: "Por favor, forneça dois nomes.\nExemplo: !arrebentar João e Maria ou !arrebentar eu e Maria",
+            }, { quoted: msg });
+            return;
+        }
+
+        const percentage = Math.floor(Math.random() * 101);
+        const replyText = `${name1} tem ${percentage}% de chance de arrebentar ${name2}! 💥💥💥`;
+
+        await sock.sendMessage(chatId, {
+            text: replyText,
+            mentions: mentions,
+        }, { quoted: msg });
+    }
+
     if (textMessage.startsWith("!vumvum")) {
         const audioPath = path.resolve(__dirname, '..', '..', '..', 'assets', 'vumvum.mp3');
 

@@ -6,7 +6,6 @@ const mentionsController = require('../../controllers/mentionsController');
 const AMIGO_SECRETO_DATA_FILE = path.resolve(__dirname, '..', '..', '..', 'data', 'amigoSecreto', 'participantes.json');
 const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
 
-// Função para carregar usuários do sistema de níveis (para obter pushNames)
 function loadUsersData() {
     try {
         if (fs.existsSync(USERS_FILE)) {
@@ -19,21 +18,17 @@ function loadUsersData() {
     return {};
 }
 
-// Função para obter o nome de um participante
 function getParticipantName(jid, usersData, contactsCache) {
-    // 1. Tenta buscar do users.json (sistema de níveis)
     if (usersData[jid]?.pushName) {
         return usersData[jid].pushName;
     }
     
-    // 2. Tenta buscar por jid alternativo (alguns usuários têm @lid)
     for (const [userId, userData] of Object.entries(usersData)) {
         if (userData.jid === jid && userData.pushName) {
             return userData.pushName;
         }
     }
     
-    // 3. Tenta buscar do contactsCache
     if (contactsCache && contactsCache[jid]) {
         const contact = contactsCache[jid];
         if (contact.notify) return contact.notify;
@@ -41,7 +36,6 @@ function getParticipantName(jid, usersData, contactsCache) {
         if (contact.pushname) return contact.pushname;
     }
     
-    // 4. Fallback: usa o número/lid
     return jid.split('@')[0];
 }
 
@@ -561,7 +555,6 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             console.error('Erro ao obter nome do grupo:', error);
         }
         
-        // Buscar nomes dos participantes usando o sistema de níveis e contactsCache
         const usersData = loadUsersData();
         const nomes = {};
         
@@ -581,7 +574,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         participantesData[chatId].groupName = groupName;
         participantesData[chatId].participantes = participantesUnicos;
         participantesData[chatId].nomes = nomes;
-        participantesData[chatId].sorteio = null; // Reseta sorteio ao adicionar novos participantes
+        participantesData[chatId].sorteio = null;
         if (!participantesData[chatId].presentes) {
             participantesData[chatId].presentes = {};
         }
@@ -623,7 +616,6 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        // Salvar o resultado do sorteio
         participantesData[chatId].sorteio = sorteio;
         participantesData[chatId].sorteioData = new Date().toISOString();
         saveParticipantes(participantesData);
