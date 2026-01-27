@@ -56,6 +56,47 @@ pm2 save
 pm2 startup
 ```
 
+## YouTube Download Configuration
+
+The `!play` and `!playmp4` commands require additional setup to work properly with YouTube.
+
+### 1. Install yt-dlp (system-wide)
+```sh
+pip3 install -U yt-dlp
+```
+
+### 2. Install Deno (JavaScript Runtime)
+YouTube requires a JavaScript runtime to solve challenges. Install Deno:
+
+```sh
+curl -fsSL https://deno.land/install.sh | sh
+```
+
+Add Deno to your PATH permanently:
+```sh
+echo 'export DENO_INSTALL="/root/.deno"' >> ~/.bashrc
+echo 'export PATH="$DENO_INSTALL/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### 3. Export YouTube Cookies
+YouTube may block requests without authentication. Export cookies from your browser:
+
+1. Install a browser extension like **"Get cookies.txt LOCALLY"** (Chrome) or **"cookies.txt"** (Firefox)
+2. Go to YouTube and make sure you're logged in
+3. Click the extension and export cookies to a file named `cookies.txt`
+4. Place the `cookies.txt` file in the BreakerBot root directory
+
+### 4. Test the Setup
+Verify everything is working:
+```sh
+yt-dlp --list-formats --cookies cookies.txt --remote-components ejs:github "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+```
+
+If you see a list of available formats, the setup is complete!
+
+> **Note:** YouTube cookies may expire after a few weeks. If downloads stop working, export fresh cookies from your browser.
+
 ## Error Handling & Logging
 BreakerBot includes an integrated logging mechanism that captures errors and logs them to error.log. If the bot encounters unexpected failures, it will attempt automatic reconnection.
 
