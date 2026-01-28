@@ -564,7 +564,9 @@ app.post('/api/users', (req, res) => {
             pushName: userData.pushName || null,
             customName: userData.customName || null,
             customNameEnabled: userData.customNameEnabled || false,
-            jid: userData.jid || userId
+            jid: userData.jid || userId,
+            profilePicture: userData.profilePicture || null,
+            profilePictureUpdatedAt: userData.profilePictureUpdatedAt || null
         };
 
         const newUser = { ...defaultUserData, ...userData };
