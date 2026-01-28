@@ -11,6 +11,7 @@ const jokesCommandsBot = require('./commands/fun/jokesCommands');
 const gamesCommandsBot = require('./commands/fun/gamesCommands');
 const amigoSecretoCommandBot = require('./commands/fun/amigoSecretoCommand');
 const menuCommandBot = require('./commands/utility/menuCommand');
+const featureCommandsBot = require('./commands/utility/featureCommands');
 const gptCommandBot = require('./commands/ai/gptCommand');
 const grokCommandBot = require('./commands/ai/grokCommand');
 const zhipuCommandsBot = require('./commands/ai/zhipuCommands');
@@ -101,6 +102,7 @@ async function connectBot() {
                 await imagesCommandsBot(sock, messages);
                 await audioCommandsBot(sock, messages);
                 await jokesCommandsBot(sock, messages, contactsCache);
+                await featureCommandsBot(sock, messages);
                 await gamesCommandsBot(sock, messages);
                 await amigoSecretoCommandBot(sock, messages, contactsCache);
                 await menuCommandBot(sock, messages);

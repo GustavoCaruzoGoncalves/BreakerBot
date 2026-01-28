@@ -1,5 +1,8 @@
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const http = require('http');
+const sharp = require('sharp');
 const mentionsController = require('../../controllers/mentionsController');
 const { admins } = require('../../config/adm');
 
@@ -14,6 +17,143 @@ function loadUsersData() {
         console.error('[EMOJI REACTION] Erro ao carregar users.json:', error);
     }
     return {};
+}
+
+function saveUsersData(data) {
+    try {
+        fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
+    } catch (err) {
+        console.error('[PFP] Erro ao salvar users.json:', err);
+    }
+}
+
+function findUserByJid(usersData, jid) {
+    if (usersData[jid]) {
+        return { key: jid, user: usersData[jid] };
+    }
+    for (const [key, userData] of Object.entries(usersData)) {
+        if (userData.jid === jid) {
+            return { key, user: userData };
+        }
+    }
+    return { key: null, user: null };
+}
+
+async function downloadImageAsBase64(url) {
+    return new Promise((resolve, reject) => {
+        const protocol = url.startsWith('https') ? https : http;
+        
+        protocol.get(url, (response) => {
+            if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                return downloadImageAsBase64(response.headers.location).then(resolve).catch(reject);
+            }
+            
+            if (response.statusCode !== 200) {
+                return reject(new Error(`Erro ao baixar imagem: ${response.statusCode}`));
+            }
+            
+            const chunks = [];
+            response.on('data', (chunk) => chunks.push(chunk));
+            response.on('end', () => {
+                const buffer = Buffer.concat(chunks);
+                const base64 = buffer.toString('base64');
+                const contentType = response.headers['content-type'] || 'image/jpeg';
+                const dataUrl = `data:${contentType};base64,${base64}`;
+                resolve(dataUrl);
+            });
+            response.on('error', reject);
+        }).on('error', reject);
+    });
+}
+
+async function applyGrayscaleFilter(inputBuffer) {
+    return sharp(inputBuffer).grayscale().jpeg().toBuffer();
+}
+
+async function applyLGBTFilter(inputBuffer) {
+    const metadata = await sharp(inputBuffer).metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+
+    const rainbowSVG = `
+        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="rainbow" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#FF0000;stop-opacity:0.95" />
+                    <stop offset="16.66%" style="stop-color:#FF8C00;stop-opacity:0.95" />
+                    <stop offset="33.33%" style="stop-color:#FFD700;stop-opacity:0.95" />
+                    <stop offset="50%" style="stop-color:#00FF00;stop-opacity:0.95" />
+                    <stop offset="66.66%" style="stop-color:#0000FF;stop-opacity:0.95" />
+                    <stop offset="83.33%" style="stop-color:#8B00FF;stop-opacity:0.95" />
+                    <stop offset="100%" style="stop-color:#FF1493;stop-opacity:0.95" />
+                </linearGradient>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#rainbow)" />
+        </svg>
+    `;
+
+    const rainbowOverlay = Buffer.from(rainbowSVG);
+
+    return sharp(inputBuffer)
+        .composite([{ input: rainbowOverlay, blend: 'overlay' }])
+        .modulate({ saturation: 1.8, brightness: 1.1 })
+        .jpeg()
+        .toBuffer();
+}
+
+async function applyBolsonaroFilter(inputBuffer) {
+    const metadata = await sharp(inputBuffer).metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+
+    const brazilSVG = `
+        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="brazil" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#009B3A;stop-opacity:0.9" />
+                    <stop offset="50%" style="stop-color:#FFDF00;stop-opacity:0.9" />
+                    <stop offset="100%" style="stop-color:#002776;stop-opacity:0.9" />
+                </linearGradient>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#brazil)" />
+        </svg>
+    `;
+
+    const brazilOverlay = Buffer.from(brazilSVG);
+
+    const logoPath = path.resolve(__dirname, '..', '..', '..', 'assets', 'logobolsonaro.png');
+    const hasLogo = fs.existsSync(logoPath);
+
+    const composites = [{ input: brazilOverlay, blend: 'overlay' }];
+
+    if (hasLogo) {
+        const logoMetadata = await sharp(logoPath).metadata();
+        const logoAspectRatio = logoMetadata.width / logoMetadata.height;
+
+        const maxLogoHeight = Math.floor(height * 0.35);
+        const logoHeight = Math.min(maxLogoHeight, height);
+        const logoWidth = Math.floor(logoHeight * logoAspectRatio);
+
+        const logoBuffer = await sharp(logoPath)
+            .resize(logoWidth, logoHeight, { fit: 'contain' })
+            .toBuffer();
+
+        const topOffset = height - logoHeight;
+        const leftOffset = Math.floor((width - logoWidth) / 2);
+
+        composites.push({
+            input: logoBuffer,
+            top: topOffset,
+            left: leftOffset,
+            blend: 'over'
+        });
+    }
+
+    return sharp(inputBuffer)
+        .composite(composites)
+        .modulate({ saturation: 1.4, brightness: 1.05 })
+        .jpeg()
+        .toBuffer();
 }
 
 async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
@@ -797,6 +937,312 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         } else {
             await sock.sendMessage(chatId, {
                 text: "❌ O áudio do VUMVUM não foi encontrado 😢",
+            }, { quoted: msg });
+        }
+    }
+
+    // ===== Comandos de foto de perfil (pfp) =====
+
+    if (textMessage.toLowerCase() === "!pfp" || textMessage.toLowerCase().startsWith("!pfp ")) {
+        const parts = textMessage.split(' ');
+        let targetUserId;
+
+        if (parts.length < 2) {
+            targetUserId = sender;
+        } else {
+            const targetUser = parts[1];
+            if (targetUser.toLowerCase() === 'me') {
+                targetUserId = sender;
+            } else if (targetUser.startsWith('@')) {
+                const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                if (mentions.length > 0) {
+                    targetUserId = mentions[0];
+                } else {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado na menção!"
+                    }, { quoted: msg });
+                    return;
+                }
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "📝 *Uso:* !pfp @usuario ou !pfp me\n\n*Exemplos:*\n• !pfp @usuario - Foto de outro usuário\n• !pfp me - Sua própria foto\n• !pfp - Sua própria foto"
+                }, { quoted: msg });
+                return;
+            }
+        }
+
+        try {
+            let usersData = loadUsersData();
+            const { key, user } = findUserByJid(usersData, targetUserId);
+
+            if (user?.profilePicture) {
+                const base64Data = user.profilePicture.split(',')[1];
+                const imageBuffer = Buffer.from(base64Data, 'base64');
+
+                const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+                await sock.sendMessage(chatId, {
+                    image: imageBuffer,
+                    caption: `📸 Foto de perfil de ${mentionInfo.mentionText}\n\n✅ Carregada do cache\n🕐 Última atualização: ${user.profilePictureUpdatedAt ? new Date(user.profilePictureUpdatedAt).toLocaleString('pt-BR') : 'N/A'}`,
+                    mentions: mentionInfo.mentions
+                }, { quoted: msg });
+                return;
+            }
+
+            const profilePictureUrl = await sock.profilePictureUrl(targetUserId, 'image').catch(() => null);
+
+            if (!profilePictureUrl) {
+                await sock.sendMessage(chatId, {
+                    text: "❌ Não foi possível obter a foto de perfil deste usuário.\nPode ser que a foto esteja privada ou o usuário não tenha foto."
+                }, { quoted: msg });
+                return;
+            }
+
+            const base64Image = await downloadImageAsBase64(profilePictureUrl);
+            const base64Data = base64Image.split(',')[1];
+            const imageBuffer = Buffer.from(base64Data, 'base64');
+
+            if (key) {
+                usersData[key].profilePicture = base64Image;
+                usersData[key].profilePictureUpdatedAt = new Date().toISOString();
+                saveUsersData(usersData);
+            }
+
+            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            await sock.sendMessage(chatId, {
+                image: imageBuffer,
+                caption: `📸 Foto de perfil de ${mentionInfo.mentionText}\n\n🔄 Buscada do WhatsApp`,
+                mentions: mentionInfo.mentions
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('[DEBUG] Erro ao buscar foto de perfil:', error);
+            await sock.sendMessage(chatId, {
+                text: `❌ Erro ao buscar foto de perfil: ${error.message}`
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage.toLowerCase().startsWith("!pfpdead")) {
+        const parts = textMessage.split(' ');
+        let targetUserId;
+
+        if (parts.length < 2) {
+            targetUserId = sender;
+        } else {
+            const targetUser = parts[1];
+            if (targetUser.toLowerCase() === 'me') {
+                targetUserId = sender;
+            } else if (targetUser.startsWith('@')) {
+                const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                if (mentions.length > 0) {
+                    targetUserId = mentions[0];
+                } else {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado na menção!"
+                    }, { quoted: msg });
+                    return;
+                }
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "📝 *Uso:* !pfpdead @usuario ou !pfpdead me\n\n*Exemplos:*\n• !pfpdead @usuario - Foto de outro usuário\n• !pfpdead me - Sua própria foto\n• !pfpdead - Sua própria foto"
+                }, { quoted: msg });
+                return;
+            }
+        }
+
+        try {
+            let imageBuffer = null;
+            
+            let usersData = loadUsersData();
+            const { key, user } = findUserByJid(usersData, targetUserId);
+
+            if (user?.profilePicture) {
+                const base64Data = user.profilePicture.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+            } else {
+                const profilePictureUrl = await sock.profilePictureUrl(targetUserId, 'image').catch(() => null);
+
+                if (!profilePictureUrl) {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Não foi possível obter a foto de perfil deste usuário.\nPode ser que a foto esteja privada ou o usuário não tenha foto."
+                    }, { quoted: msg });
+                    return;
+                }
+
+                const base64Image = await downloadImageAsBase64(profilePictureUrl);
+                const base64Data = base64Image.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+
+                if (key) {
+                    usersData[key].profilePicture = base64Image;
+                    usersData[key].profilePictureUpdatedAt = new Date().toISOString();
+                    saveUsersData(usersData);
+                }
+            }
+
+            const grayscaleBuffer = await applyGrayscaleFilter(imageBuffer);
+
+            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            await sock.sendMessage(chatId, {
+                image: grayscaleBuffer,
+                caption: `🪦 ${mentionInfo.mentionText} ⚰️`,
+                mentions: mentionInfo.mentions
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('[DEBUG] Erro ao processar pfpdead:', error);
+            await sock.sendMessage(chatId, {
+                text: `❌ Erro ao processar imagem: ${error.message}`
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage.toLowerCase().startsWith("!pfpgay")) {
+        const parts = textMessage.split(' ');
+        let targetUserId;
+
+        if (parts.length < 2) {
+            targetUserId = sender;
+        } else {
+            const targetUser = parts[1];
+            if (targetUser.toLowerCase() === 'me') {
+                targetUserId = sender;
+            } else if (targetUser.startsWith('@')) {
+                const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                if (mentions.length > 0) {
+                    targetUserId = mentions[0];
+                } else {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado na menção!"
+                    }, { quoted: msg });
+                    return;
+                }
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "📝 *Uso:* !pfpgay @usuario ou !pfpgay me\n\n*Exemplos:*\n• !pfpgay @usuario - Foto de outro usuário\n• !pfpgay me - Sua própria foto\n• !pfpgay - Sua própria foto"
+                }, { quoted: msg });
+                return;
+            }
+        }
+
+        try {
+            let imageBuffer = null;
+            
+            let usersData = loadUsersData();
+            const { key, user } = findUserByJid(usersData, targetUserId);
+
+            if (user?.profilePicture) {
+                const base64Data = user.profilePicture.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+            } else {
+                const profilePictureUrl = await sock.profilePictureUrl(targetUserId, 'image').catch(() => null);
+
+                if (!profilePictureUrl) {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Não foi possível obter a foto de perfil deste usuário.\nPode ser que a foto esteja privada ou o usuário não tenha foto."
+                    }, { quoted: msg });
+                    return;
+                }
+
+                const base64Image = await downloadImageAsBase64(profilePictureUrl);
+                const base64Data = base64Image.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+
+                if (key) {
+                    usersData[key].profilePicture = base64Image;
+                    usersData[key].profilePictureUpdatedAt = new Date().toISOString();
+                    saveUsersData(usersData);
+                }
+            }
+
+            const lgbtBuffer = await applyLGBTFilter(imageBuffer);
+
+            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            await sock.sendMessage(chatId, {
+                image: lgbtBuffer,
+                caption: `🌈 ${mentionInfo.mentionText} 🏳️‍🌈`,
+                mentions: mentionInfo.mentions
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('[DEBUG] Erro ao processar pfpgay:', error);
+            await sock.sendMessage(chatId, {
+                text: `❌ Erro ao processar imagem: ${error.message}`
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage.toLowerCase().startsWith("!pfpbolsonaro")) {
+        const parts = textMessage.split(' ');
+        let targetUserId;
+
+        if (parts.length < 2) {
+            targetUserId = sender;
+        } else {
+            const targetUser = parts[1];
+            if (targetUser.toLowerCase() === 'me') {
+                targetUserId = sender;
+            } else if (targetUser.startsWith('@')) {
+                const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                if (mentions.length > 0) {
+                    targetUserId = mentions[0];
+                } else {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado na menção!"
+                    }, { quoted: msg });
+                    return;
+                }
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "📝 *Uso:* !pfpbolsonaro @usuario ou !pfpbolsonaro me\n\n*Exemplos:*\n• !pfpbolsonaro @usuario - Foto de outro usuário\n• !pfpbolsonaro me - Sua própria foto\n• !pfpbolsonaro - Sua própria foto"
+                }, { quoted: msg });
+                return;
+            }
+        }
+
+        try {
+            let imageBuffer = null;
+            
+            let usersData = loadUsersData();
+            const { key, user } = findUserByJid(usersData, targetUserId);
+
+            if (user?.profilePicture) {
+                const base64Data = user.profilePicture.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+            } else {
+                const profilePictureUrl = await sock.profilePictureUrl(targetUserId, 'image').catch(() => null);
+
+                if (!profilePictureUrl) {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Não foi possível obter a foto de perfil deste usuário.\nPode ser que a foto esteja privada ou o usuário não tenha foto."
+                    }, { quoted: msg });
+                    return;
+                }
+
+                const base64Image = await downloadImageAsBase64(profilePictureUrl);
+                const base64Data = base64Image.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+
+                if (key) {
+                    usersData[key].profilePicture = base64Image;
+                    usersData[key].profilePictureUpdatedAt = new Date().toISOString();
+                    saveUsersData(usersData);
+                }
+            }
+
+            const bolsonaroBuffer = await applyBolsonaroFilter(imageBuffer);
+
+            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            await sock.sendMessage(chatId, {
+                image: bolsonaroBuffer,
+                caption: `🇧🇷 ${mentionInfo.mentionText} 2026`,
+                mentions: mentionInfo.mentions
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('[DEBUG] Erro ao processar pfpbolsonaro:', error);
+            await sock.sendMessage(chatId, {
+                text: `❌ Erro ao processar imagem: ${error.message}`
             }, { quoted: msg });
         }
     }
