@@ -243,9 +243,9 @@ async function audioCommandsBot(sock, { messages }) {
             const fileSizeInMB = stats.size / (1024 * 1024);
             console.log(`[playmp4] Tamanho do arquivo: ${fileSizeInMB.toFixed(2)}MB`);
 
-            if (fileSizeInMB > 60) {
-                throw new Error('Arquivo muito grande: ' + fileSizeInMB.toFixed(2) + 'MB');
-            }
+//            if (fileSizeInMB > 60) {
+//                throw new Error('Arquivo muito grande: ' + fileSizeInMB.toFixed(2) + 'MB');
+//            }
 
             const videoThumbPath = path.join(__dirname, 'temp_video_thumb.jpg');
             console.log('[playmp4] Gerando thumbnail...');
@@ -270,20 +270,17 @@ async function audioCommandsBot(sock, { messages }) {
             
             if (fs.existsSync(videoThumbPath)) fs.unlinkSync(videoThumbPath);
 
-        } catch (error) {
-            console.error('Erro ao processar vídeo:', error);
-            await sock.sendMessage(sender, { 
-                text: error.message.includes('muito grande') 
-                    ? 'Desculpe, o vídeo é muito grande para ser enviado! Tente um vídeo mais curto. 😢' 
-                    : 'Desculpe, ocorreu um erro ao baixar o vídeo! 😢'
-            }, { quoted: msg });
-        } finally {
             try {
                 if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
                 if (fs.existsSync(thumbPath)) fs.unlinkSync(thumbPath);
             } catch (err) {
                 console.error('Erro ao limpar arquivos temporários:', err);
             }
+        } catch (error) {
+            console.error('Erro ao processar vídeo:', error);
+            await sock.sendMessage(sender, { 
+                text: 'Desculpe, ocorreu um erro ao baixar o vídeo! 😢'
+            }, { quoted: msg });
         }
     }
 }

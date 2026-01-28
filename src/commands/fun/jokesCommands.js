@@ -28,6 +28,10 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     const messageType = Object.keys(msg.message)[0];
     const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
+    if (msg.key.fromMe || messageType === 'reactionMessage') {
+        return;
+    }
+
     //const poopNumber = process.env.POOP_NUMBER;
     //if (messageType === 'reactionMessage') {
     //    const reactionSender = isGroup 
