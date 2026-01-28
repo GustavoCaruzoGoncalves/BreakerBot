@@ -234,7 +234,7 @@ async function audioCommandsBot(sock, { messages }) {
 
             await sock.sendMessage(sender, searchingMessage, { quoted: msg });
 
-            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best');
+            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720][vcodec^=avc]+bestaudio/best[height<=720]');
 
             if (!fs.existsSync(videoPath)) {
                 throw new Error('Arquivo não foi baixado');
@@ -243,10 +243,6 @@ async function audioCommandsBot(sock, { messages }) {
             const stats = fs.statSync(videoPath);
             const fileSizeInMB = stats.size / (1024 * 1024);
             console.log(`[playmp4] Tamanho do arquivo: ${fileSizeInMB.toFixed(2)}MB`);
-
-//            if (fileSizeInMB > 60) {
-//                throw new Error('Arquivo muito grande: ' + fileSizeInMB.toFixed(2) + 'MB');
-//            }
 
             const videoThumbPath = path.join(__dirname, 'temp_video_thumb.jpg');
             console.log('[playmp4] Gerando thumbnail...');
