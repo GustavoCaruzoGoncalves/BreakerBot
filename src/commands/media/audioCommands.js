@@ -234,7 +234,7 @@ async function audioCommandsBot(sock, { messages }) {
 
             await sock.sendMessage(sender, searchingMessage, { quoted: msg });
 
-            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=720][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=720][vcodec^=avc]+bestaudio/best[height<=720]');
+            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080][vcodec^=avc]+bestaudio/best[height<=1080]');
 
             if (!fs.existsSync(videoPath)) {
                 throw new Error('Arquivo não foi baixado');
