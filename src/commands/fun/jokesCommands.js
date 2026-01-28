@@ -156,6 +156,105 @@ async function applyBolsonaroFilter(inputBuffer) {
         .toBuffer();
 }
 
+async function applyBolsonaro2Filter(inputBuffer) {
+    const metadata = await sharp(inputBuffer).metadata();
+    const width = metadata.width;
+    const height = metadata.height;
+
+    const brazilSVG = `
+        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="brazil2" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#009B3A;stop-opacity:0.9" />
+                    <stop offset="50%" style="stop-color:#FFDF00;stop-opacity:0.9" />
+                    <stop offset="100%" style="stop-color:#002776;stop-opacity:0.9" />
+                </linearGradient>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#brazil2)" />
+        </svg>
+    `;
+
+    const brazilOverlay = Buffer.from(brazilSVG);
+
+    const logoPath = path.resolve(__dirname, '..', '..', '..', 'assets', 'logobolsonaro2.png');
+    const hasLogo = fs.existsSync(logoPath);
+
+    const composites = [{ input: brazilOverlay, blend: 'overlay' }];
+
+    if (hasLogo) {
+        const logoMetadata = await sharp(logoPath).metadata();
+        const logoAspectRatio = logoMetadata.width / logoMetadata.height;
+
+        const maxLogoHeight = Math.floor(height * 0.6);
+        const logoHeight = Math.min(maxLogoHeight, height);
+        const logoWidth = Math.floor(logoHeight * logoAspectRatio);
+
+        const logoBuffer = await sharp(logoPath)
+            .resize(logoWidth, logoHeight, { fit: 'contain' })
+            .toBuffer();
+
+        const topOffset = height - logoHeight + Math.floor(height * 0.1);
+        const leftOffset = Math.floor((width - logoWidth) / 2);
+
+        composites.push({
+            input: logoBuffer,
+            top: topOffset,
+            left: leftOffset,
+            blend: 'over'
+        });
+    }
+
+    return sharp(inputBuffer)
+        .composite(composites)
+        .modulate({ saturation: 1.4, brightness: 1.05 })
+        .jpeg()
+        .toBuffer();
+}
+
+async function applyBolsonaro3Filter(inputBuffer) {
+    const framePath = path.resolve(__dirname, '..', '..', '..', 'assets', 'logobolsonaro3.png');
+    const hasFrame = fs.existsSync(framePath);
+
+    if (!hasFrame) {
+        return sharp(inputBuffer).jpeg().toBuffer();
+    }
+
+    const frameMetadata = await sharp(framePath).metadata();
+    const frameWidth = frameMetadata.width;
+    const frameHeight = frameMetadata.height;
+
+    const photoSize = Math.min(frameWidth, frameHeight) * 0.625;
+
+    const resizedPhoto = await sharp(inputBuffer)
+        .resize(Math.floor(photoSize), Math.floor(photoSize), { fit: 'cover' })
+        .toBuffer();
+
+    const frameBuffer = await sharp(framePath).toBuffer();
+
+    return sharp({
+        create: {
+            width: frameWidth,
+            height: frameHeight,
+            channels: 4,
+            background: { r: 0, g: 0, b: 0, alpha: 0 }
+        }
+    })
+        .composite([
+            {
+                input: resizedPhoto,
+                gravity: 'center',
+                blend: 'over'
+            },
+            {
+                input: frameBuffer,
+                gravity: 'center',
+                blend: 'over'
+            }
+        ])
+        .jpeg()
+        .toBuffer();
+}
+
 async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
@@ -1172,7 +1271,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase().startsWith("!pfpbolsonaro")) {
+    if (textMessage.toLowerCase() === "!pfpbolsonaro" || textMessage.toLowerCase().startsWith("!pfpbolsonaro ")) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1241,6 +1340,156 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
         } catch (error) {
             console.error('[DEBUG] Erro ao processar pfpbolsonaro:', error);
+            await sock.sendMessage(chatId, {
+                text: `❌ Erro ao processar imagem: ${error.message}`
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage.toLowerCase().startsWith("!pfpbolsonaro2")) {
+        const parts = textMessage.split(' ');
+        let targetUserId;
+
+        if (parts.length < 2) {
+            targetUserId = sender;
+        } else {
+            const targetUser = parts[1];
+            if (targetUser.toLowerCase() === 'me') {
+                targetUserId = sender;
+            } else if (targetUser.startsWith('@')) {
+                const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                if (mentions.length > 0) {
+                    targetUserId = mentions[0];
+                } else {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado na menção!"
+                    }, { quoted: msg });
+                    return;
+                }
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "📝 *Uso:* !pfpbolsonaro2 @usuario ou !pfpbolsonaro2 me\n\n*Exemplos:*\n• !pfpbolsonaro2 @usuario\n• !pfpbolsonaro2 me\n• !pfpbolsonaro2"
+                }, { quoted: msg });
+                return;
+            }
+        }
+
+        try {
+            let imageBuffer = null;
+            
+            let usersData = loadUsersData();
+            const { key, user } = findUserByJid(usersData, targetUserId);
+
+            if (user?.profilePicture) {
+                const base64Data = user.profilePicture.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+            } else {
+                const profilePictureUrl = await sock.profilePictureUrl(targetUserId, 'image').catch(() => null);
+
+                if (!profilePictureUrl) {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Não foi possível obter a foto de perfil deste usuário.\nPode ser que a foto esteja privada ou o usuário não tenha foto."
+                    }, { quoted: msg });
+                    return;
+                }
+
+                const base64Image = await downloadImageAsBase64(profilePictureUrl);
+                const base64Data = base64Image.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+
+                if (key) {
+                    usersData[key].profilePicture = base64Image;
+                    usersData[key].profilePictureUpdatedAt = new Date().toISOString();
+                    saveUsersData(usersData);
+                }
+            }
+
+            const bolsonaro2Buffer = await applyBolsonaro2Filter(imageBuffer);
+
+            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            await sock.sendMessage(chatId, {
+                image: bolsonaro2Buffer,
+                caption: `🇧🇷 ${mentionInfo.mentionText} COM BOLSONARO`,
+                mentions: mentionInfo.mentions
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('[DEBUG] Erro ao processar pfpbolsonaro2:', error);
+            await sock.sendMessage(chatId, {
+                text: `❌ Erro ao processar imagem: ${error.message}`
+            }, { quoted: msg });
+        }
+    }
+
+    if (textMessage.toLowerCase().startsWith("!pfpbolsonaro3")) {
+        const parts = textMessage.split(' ');
+        let targetUserId;
+
+        if (parts.length < 2) {
+            targetUserId = sender;
+        } else {
+            const targetUser = parts[1];
+            if (targetUser.toLowerCase() === 'me') {
+                targetUserId = sender;
+            } else if (targetUser.startsWith('@')) {
+                const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                if (mentions.length > 0) {
+                    targetUserId = mentions[0];
+                } else {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado na menção!"
+                    }, { quoted: msg });
+                    return;
+                }
+            } else {
+                await sock.sendMessage(chatId, {
+                    text: "📝 *Uso:* !pfpbolsonaro3 @usuario ou !pfpbolsonaro3 me\n\n*Exemplos:*\n• !pfpbolsonaro3 @usuario\n• !pfpbolsonaro3 me\n• !pfpbolsonaro3"
+                }, { quoted: msg });
+                return;
+            }
+        }
+
+        try {
+            let imageBuffer = null;
+            
+            let usersData = loadUsersData();
+            const { key, user } = findUserByJid(usersData, targetUserId);
+
+            if (user?.profilePicture) {
+                const base64Data = user.profilePicture.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+            } else {
+                const profilePictureUrl = await sock.profilePictureUrl(targetUserId, 'image').catch(() => null);
+
+                if (!profilePictureUrl) {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Não foi possível obter a foto de perfil deste usuário.\nPode ser que a foto esteja privada ou o usuário não tenha foto."
+                    }, { quoted: msg });
+                    return;
+                }
+
+                const base64Image = await downloadImageAsBase64(profilePictureUrl);
+                const base64Data = base64Image.split(',')[1];
+                imageBuffer = Buffer.from(base64Data, 'base64');
+
+                if (key) {
+                    usersData[key].profilePicture = base64Image;
+                    usersData[key].profilePictureUpdatedAt = new Date().toISOString();
+                    saveUsersData(usersData);
+                }
+            }
+
+            const framedBuffer = await applyBolsonaro3Filter(imageBuffer);
+
+            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            await sock.sendMessage(chatId, {
+                image: framedBuffer,
+                caption: `🟢 ${mentionInfo.mentionText} DEUS, PÁTRIA, FAMÍLIA, LIBERDADE 🟡`,
+                mentions: mentionInfo.mentions
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.error('[DEBUG] Erro ao processar pfpbolsonaro3:', error);
             await sock.sendMessage(chatId, {
                 text: `❌ Erro ao processar imagem: ${error.message}`
             }, { quoted: msg });
