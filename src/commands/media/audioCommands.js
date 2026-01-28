@@ -98,6 +98,7 @@ async function downloadWithYtdlp(url, outputPath, format) {
         '--remote-components', 'ejs:github',
         '--merge-output-format', 'mp4',
         '--ffmpeg-location', ffmpegPath.replace(/ffmpeg(\.exe)?$/, ''),
+        '--force-overwrites',
     ];
 
     if (fs.existsSync(COOKIES_PATH)) {
@@ -233,7 +234,7 @@ async function audioCommandsBot(sock, { messages }) {
 
             await sock.sendMessage(sender, searchingMessage, { quoted: msg });
 
-            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]');
+            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best');
 
             if (!fs.existsSync(videoPath)) {
                 throw new Error('Arquivo não foi baixado');
