@@ -194,8 +194,9 @@ class LevelSystem {
         if (usersData[jid]) {
             return jid;
         }
-        
+        const isUserKey = (k) => typeof k === 'string' && k.includes('@');
         for (const [savedJid, userData] of Object.entries(usersData)) {
+            if (!isUserKey(savedJid)) continue;
             if (userData.jid === jid) {
                 return savedJid;
             }
@@ -596,10 +597,9 @@ class LevelSystem {
 
     getRanking(limit = 10) {
         const usersData = this.readUsersData();
-        
-        console.log(`[DEBUG] Calculando ranking com ${Object.keys(usersData).length} usuários`);
-        
-        const sortedUsers = Object.entries(usersData)
+        const userEntries = Object.entries(usersData).filter(([k]) => typeof k === 'string' && k.includes('@'));
+        console.log(`[DEBUG] Calculando ranking com ${userEntries.length} usuários`);
+        const sortedUsers = userEntries
             .sort(([,a], [,b]) => {
                 if (a.prestige !== b.prestige) return b.prestige - a.prestige;
                 if (a.level !== b.level) return b.level - a.level;
@@ -785,7 +785,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.startsWith("!me")) {
+    if (textMessage === "!me" || textMessage.startsWith("!me ")) {
         const userInfo = levelSystem.getUserInfo(sender);
         const rank = userInfo.rank;
         

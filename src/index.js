@@ -19,6 +19,7 @@ const banCommandBot = require('./commands/moderation/banCommand');
 const lyricsCommandBot = require('./commands/utility/lyricsCommand');
 const sendJsCommandBot = require('./commands/utility/sendJsCommand');
 const levelCommandBot = require('./commands/level/levelCommand');
+const auraCommandBot = require('./commands/aura/auraCommand');
 
 const logError = (error) => {
     const errorLogPath = path.join(__dirname, '..', 'data', 'logs', 'error.log');
@@ -113,6 +114,7 @@ async function connectBot() {
 		        await zhipuCommandsBot(sock, messages);
 		        await sendJsCommandBot(sock, messages);
 		        await levelCommandBot(sock, messages, contactsCache);
+		        await auraCommandBot(sock, messages, contactsCache);
             } catch (err) {
                 console.error('Erro ao processar mensagem:', err);
                 logError(err);

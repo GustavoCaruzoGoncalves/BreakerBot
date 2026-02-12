@@ -52,6 +52,39 @@ const AUTH_CODES_FILE = path.join(__dirname, '..', '..', 'data', 'auth', 'auth_c
 const PENDING_MESSAGES_FILE = path.join(__dirname, '..', '..', 'data', 'auth', 'pending_messages.json');
 const SESSIONS_FILE = path.join(__dirname, '..', '..', 'data', 'auth', 'sessions.json');
 const AMIGO_SECRETO_FILE = path.join(__dirname, '..', '..', 'data', 'amigoSecreto', 'participantes.json');
+const PRAISED_FILE = path.join(__dirname, '..', '..', 'data', 'praised.json');
+
+const auraCommand = require('../commands/aura/auraCommand');
+const getAuraKey = auraCommand.getAuraKey;
+const getWhoPraised = auraCommand.getWhoPraised;
+const MISSION_IDS = auraCommand.MISSION_IDS;
+const MISSION_CONFIG = auraCommand.MISSION_CONFIG;
+const RANDOM_EVENTS = auraCommand.RANDOM_EVENTS;
+const EVENT_SPAWN_CHANCE = auraCommand.EVENT_SPAWN_CHANCE;
+const EVENT_COOLDOWN_MS = auraCommand.EVENT_COOLDOWN_MS;
+const EVENT_CHANCE_MAX = auraCommand.EVENT_CHANCE_MAX;
+const MOG_DURATION_MS = auraCommand.MOG_DURATION_MS;
+const MOGNOW_COUNTDOWN_SEC = auraCommand.MOGNOW_COUNTDOWN_SEC;
+const MOGNOW_WINDOW_MS = auraCommand.MOGNOW_WINDOW_MS;
+
+const AURA_TIERS = [
+    { minPoints: 50000, name: 'Deus do chat' },
+    { minPoints: 10000, name: 'Entidade' },
+    { minPoints: 5000,  name: 'Sigma' },
+    { minPoints: 2000,  name: 'Dominante' },
+    { minPoints: 500,   name: 'Presença' },
+    { minPoints: 0,     name: 'NPC' }
+];
+
+const getAuraTier = (auraPoints) => {
+    const points = Number(auraPoints) || 0;
+    for (const tier of AURA_TIERS) {
+        if (points >= tier.minPoints) return tier;
+    }
+    return AURA_TIERS[AURA_TIERS.length - 1];
+};
+
+const isUserKey = (k) => typeof k === 'string' && k.includes('@');
 
 const backupsDir = path.join(__dirname, '..', '..', 'data', 'backups');
 if (!fs.existsSync(backupsDir)) {
@@ -1162,6 +1195,171 @@ app.patch('/api/amigo-secreto/:groupId/presente', (req, res) => {
     }
 });
 
+app.get('/api/aura/ranking', (req, res) => {
+    try {
+        const limit = Math.min(parseInt(req.query.limit, 10) || 10, 100);
+        const users = readJsonFile(USERS_FILE);
+        if (!users) {
+            return res.status(500).json({ success: false, message: 'Erro ao ler usuários' });
+        }
+        const entries = [];
+        for (const [userId, data] of Object.entries(users)) {
+            if (!isUserKey(userId) || !data?.aura) continue;
+            const auraPoints = data.aura.auraPoints ?? 0;
+            entries.push({
+                userId,
+                auraPoints,
+                tierName: getAuraTier(auraPoints).name,
+                displayName: data.customNameEnabled && data.customName ? data.customName : (data.pushName || userId.split('@')[0])
+            });
+        }
+        entries.sort((a, b) => b.auraPoints - a.auraPoints);
+        const ranking = entries.slice(0, limit);
+        res.json({
+            success: true,
+            limit,
+            ranking,
+            tiers: AURA_TIERS
+        });
+    } catch (error) {
+        console.error('Erro ao buscar ranking de aura:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/aura/users/:id', (req, res) => {
+    try {
+        const requestedId = formatUserId(req.params.id);
+        const users = readJsonFile(USERS_FILE);
+        if (!users) {
+            return res.status(500).json({ success: false, message: 'Erro ao ler usuários' });
+        }
+        let userId = requestedId;
+        let user = users[userId];
+        if (!user) {
+            for (const [uid, data] of Object.entries(users)) {
+                if (!isUserKey(uid)) continue;
+                if (data.jid === requestedId || uid === requestedId) {
+                    user = data;
+                    userId = uid;
+                    break;
+                }
+            }
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Usuário não encontrado',
+                    userId: requestedId
+                });
+            }
+        }
+        const aura = user.aura || {
+            auraPoints: 0,
+            stickerHash: null,
+            character: null,
+            dailyMissions: {
+                lastResetDate: null,
+                drawnMissions: [],
+                completedMissionIds: [],
+                progress: { messages: 0, reactions: 0, duelWin: 0, surviveAttack: 0, media: 0, helpSomeone: 0 }
+            },
+            lastRitualDate: null,
+            lastTreinarAt: null,
+            lastDominarAt: null
+        };
+        const tier = getAuraTier(aura.auraPoints ?? 0);
+        const displayName = user.customNameEnabled && user.customName ? user.customName : (user.pushName || userId.split('@')[0]);
+        const auraKey = getAuraKey(userId);
+        const praisedBy = auraKey ? (getWhoPraised(auraKey) || []) : [];
+        res.json({
+            success: true,
+            userId,
+            displayName,
+            aura: {
+                auraPoints: aura.auraPoints ?? 0,
+                stickerHash: aura.stickerHash ?? null,
+                character: aura.character ?? null,
+                hasStickerHash: !!(aura.stickerHash),
+                dailyMissions: aura.dailyMissions ?? null,
+                lastRitualDate: aura.lastRitualDate ?? null,
+                lastTreinarAt: aura.lastTreinarAt ?? null,
+                lastDominarAt: aura.lastDominarAt ?? null,
+                tierName: tier.name,
+                tierMinPoints: tier.minPoints
+            },
+            praisedBy,
+            profile: {
+                pushName: user.pushName ?? null,
+                customName: user.customName ?? null,
+                customNameEnabled: !!user.customNameEnabled
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao buscar aura do usuário:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/aura/tiers', (req, res) => {
+    try {
+        res.json({
+            success: true,
+            tiers: AURA_TIERS
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/aura/config', (req, res) => {
+    try {
+        res.json({
+            success: true,
+            tiers: AURA_TIERS,
+            missionIds: MISSION_IDS,
+            missionConfig: MISSION_CONFIG,
+            randomEvents: RANDOM_EVENTS,
+            eventSpawnChance: EVENT_SPAWN_CHANCE,
+            eventCooldownMs: EVENT_COOLDOWN_MS,
+            eventChanceMax: EVENT_CHANCE_MAX,
+            mogDurationMs: MOG_DURATION_MS,
+            mognowCountdownSec: MOGNOW_COUNTDOWN_SEC,
+            mognowWindowMs: MOGNOW_WINDOW_MS
+        });
+    } catch (error) {
+        console.error('Erro ao buscar config de aura:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/aura/global', (req, res) => {
+    try {
+        const users = readJsonFile(USERS_FILE);
+        const globalKey = '__auraGlobal';
+        const global = (users && users[globalKey]) ? users[globalKey] : {};
+        res.json({
+            success: true,
+            pendingMogByChat: global.pendingMogByChat ?? {}
+        });
+    } catch (error) {
+        console.error('Erro ao buscar dados globais de aura:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/aura/praised', (req, res) => {
+    try {
+        const praised = readJsonFile(PRAISED_FILE) || {};
+        res.json({
+            success: true,
+            praised
+        });
+    } catch (error) {
+        console.error('Erro ao buscar praised:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
 app.get('/api/health', (req, res) => {
     res.json({
         success: true,
@@ -1208,6 +1406,14 @@ app.get('/', (req, res) => {
                 'GET /api/amigo-secreto': 'Lista todos os grupos de amigo secreto',
                 'GET /api/amigo-secreto/user/:id': 'Lista grupos do usuário (aceita @s.whatsapp.net ou @lid)',
                 'PATCH /api/amigo-secreto/:groupId/presente': 'Atualiza presente desejado do usuário no grupo'
+            },
+            aura: {
+                'GET /api/aura/ranking': 'Ranking de aura (query: limit, default 10). Retorna ranking, tier de cada um e lista de tiers.',
+                'GET /api/aura/users/:id': 'Todos os dados de aura do usuário: auraPoints, stickerHash, character, dailyMissions (completo), cooldowns (ritual, treinar, dominar), praisedBy, perfil.',
+                'GET /api/aura/tiers': 'Lista níveis de aura (NPC, Presença, Dominante, Sigma, Entidade, Deus do chat)',
+                'GET /api/aura/config': 'Config completa: tiers, missionIds, missionConfig, randomEvents, eventSpawnChance, eventCooldownMs, eventChanceMax, mogDurationMs, mognowCountdownSec, mognowWindowMs',
+                'GET /api/aura/global': 'Dados globais de aura: pendingMogByChat (desafios de duelo pendentes por chat)',
+                'GET /api/aura/praised': 'Mapa completo de elogios: por userId (quem foi elogiado), lista de userIds que elogiaram'
             },
             health: {
                 'GET /api/health': 'Status da API'
