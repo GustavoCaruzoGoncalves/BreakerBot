@@ -527,7 +527,7 @@ async function checkAuraNegativeAndPunish(sock, chatId, number, contactsCache) {
     auraSystem.addAuraPoints(number, -1000);
 }
 
-async function endMogDuel(sock, chatId, duel) {
+async function endMogDuel(sock, chatId, duel, contactsCache = {}) {
     activeMogDuel.delete(chatId);
     const fromKey = duel.fromKey;
     const toKey = duel.toKey;
@@ -539,16 +539,15 @@ async function endMogDuel(sock, chatId, duel) {
         return;
     }
     const winnerAuraKey = getAuraKey(winnerKey);
-    const winnerNum = getUserIdNumber(winnerAuraKey);
-    const levelUser = getLevelUserData(winnerNum);
-    const winnerName = levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || winnerAuraKey.split('@')[0]);
     const winnerCount = winnerKey === fromKey ? countFrom : countTo;
     const loserCount = winnerKey === fromKey ? countTo : countFrom;
     auraSystem.addAuraPoints(winnerAuraKey, 500);
     const missionReward = auraSystem.hasMission(winnerAuraKey, 'duel_win') ? auraSystem.completeMission(winnerAuraKey, 'duel_win') : 0;
     const totalGain = 500 + missionReward;
+    const winnerMention = mentionsController.processSingleMention(getJidForMention(winnerAuraKey), contactsCache);
     await sock.sendMessage(chatId, {
-        text: `🏆 Duelo encerrado! *${winnerName}* venceu o mog! (${winnerCount} x ${loserCount} mensagens)\n✨ *+500* aura pela vitória${missionReward ? ` + *${missionReward}* pela missão (Vença 1 duelo)` : ''} = *${totalGain}* aura no total.`
+        text: `🏆 Duelo encerrado! ${winnerMention.mentionText} venceu o mog! (${winnerCount} x ${loserCount} mensagens)\n✨ *+500* aura pela vitória${missionReward ? ` + *${missionReward}* pela missão (Vença 1 duelo)` : ''} = *${totalGain}* aura no total.`,
+        mentions: winnerMention.mentions?.length ? winnerMention.mentions : undefined
     });
 }
 
@@ -581,10 +580,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 const result = applyEventEffect(activeEvent.effect, senderAuraKey);
                 activeEvent.winnerKey = senderKey;
                 clearEventTimer(chatId);
-                const levelUser = getLevelUserData(number);
-                const displayName = levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || number);
+                const winnerMention = mentionsController.processSingleMention(getJidForMention(senderAuraKey), contactsCache);
                 const emoji = result.amount >= 0 ? '✨' : '💀';
-                await sock.sendMessage(chatId, { text: `${emoji} *${displayName}* ${result.amount >= 0 ? 'ganhou' : 'perdeu'} *${Math.abs(result.amount)}* de aura! Total: *${result.newTotal}*` }, { quoted: msg });
+                await sock.sendMessage(chatId, {
+                    text: `${emoji} ${winnerMention.mentionText} ${result.amount >= 0 ? 'ganhou' : 'perdeu'} *${Math.abs(result.amount)}* de aura! Total: *${result.newTotal}*`,
+                    mentions: winnerMention.mentions?.length ? winnerMention.mentions : undefined
+                }, { quoted: msg });
                 return;
             }
             if (activeEvent.type === 'all') {
@@ -594,9 +595,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 }
                 activeEvent.participants.add(senderKey);
                 const result = applyEventEffect(activeEvent.effect, senderAuraKey);
-                const levelUser = getLevelUserData(number);
-                const displayName = levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || number);
-                await sock.sendMessage(chatId, { text: `✨ *${displayName}* entrou e ganhou *${result.amount}* de aura! Total: *${result.newTotal}*` }, { quoted: msg });
+                const participantMention = mentionsController.processSingleMention(getJidForMention(senderAuraKey), contactsCache);
+                await sock.sendMessage(chatId, {
+                    text: `✨ ${participantMention.mentionText} entrou e ganhou *${result.amount}* de aura! Total: *${result.newTotal}*`,
+                    mentions: participantMention.mentions?.length ? participantMention.mentions : undefined
+                }, { quoted: msg });
                 return;
             }
         }
@@ -642,7 +645,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         });
         setTimeout(() => {
             const duel = activeMogDuel.get(chatId);
-            if (duel) endMogDuel(sock, chatId, duel);
+            if (duel) endMogDuel(sock, chatId, duel, contactsCache);
         }, MOG_DURATION_MS + 500);
         return;
     }
@@ -708,23 +711,22 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const countTarget = state.countTarget || 0;
             const attackerAuraKey = getAuraKey(state.attackerKey);
             const targetAuraKey = getAuraKey(state.targetKey);
-            const attackerNum = getUserIdNumber(attackerAuraKey);
-            const targetNum = getUserIdNumber(targetAuraKey);
-            const attackerLevelUser = getLevelUserData(attackerNum);
-            const targetLevelUser = getLevelUserData(targetNum);
-            const attackerName = attackerLevelUser?.customNameEnabled && attackerLevelUser?.customName ? attackerLevelUser.customName : (attackerLevelUser?.pushName || attackerAuraKey.split('@')[0]);
-            const targetName = targetLevelUser?.customNameEnabled && targetLevelUser?.customName ? targetLevelUser.customName : (targetLevelUser?.pushName || targetAuraKey.split('@')[0]);
+            const attackerMention = mentionsController.processSingleMention(getJidForMention(attackerAuraKey), contactsCache);
+            const targetMention = mentionsController.processSingleMention(getJidForMention(targetAuraKey), contactsCache);
+            const mognowMentions = [...(attackerMention.mentions || []), ...(targetMention.mentions || [])].filter(Boolean);
             if (countTarget > countAttacker) {
                 auraSystem.addAuraPoints(targetAuraKey, 500);
                 const missionReward = auraSystem.hasMission(targetAuraKey, 'survive_attack') ? auraSystem.completeMission(targetAuraKey, 'survive_attack') : 0;
                 const totalGain = 500 + missionReward;
                 sock.sendMessage(chatId, {
-                    text: `🛡️ *${targetName}* sobreviveu ao ataque! (${countTarget} x ${countAttacker} mensagens)\n✨ *+500* aura${missionReward ? ` + *${missionReward}* pela missão` : ''} = *${totalGain}* aura.`
+                    text: `🛡️ ${targetMention.mentionText} sobreviveu ao ataque! (${countTarget} x ${countAttacker} mensagens)\n✨ *+500* aura${missionReward ? ` + *${missionReward}* pela missão` : ''} = *${totalGain}* aura.`,
+                    mentions: mognowMentions.length ? mognowMentions : undefined
                 }).catch(() => {});
             } else if (countAttacker > countTarget) {
                 if (attackerAuraKey) auraSystem.addAuraPoints(attackerAuraKey, 5);
                 sock.sendMessage(chatId, {
-                    text: `⏱ *${attackerName}* venceu o mognow! (${countAttacker} x ${countTarget} mensagens)\n✨ Atacante ganha *5* de aura.`
+                    text: `⏱ ${attackerMention.mentionText} venceu o mognow! (${countAttacker} x ${countTarget} mensagens)\n✨ Atacante ganha *5* de aura.`,
+                    mentions: mognowMentions.length ? mognowMentions : undefined
                 }).catch(() => {});
             } else {
                 sock.sendMessage(chatId, { text: `⏱ Empate! (${countAttacker} x ${countTarget}) Ninguém ganha aura.` }).catch(() => {});
@@ -1119,7 +1121,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             return;
         }
         const levelUser = getLevelUserData(targetNumber);
-        const displayName = levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || targetKey.split('@')[0]);
+        const mentionInfo = targetKey !== senderAuraKey ? mentionsController.processSingleMention(getJidForMention(targetKey), contactsCache) : null;
+        const displayName = mentionInfo ? mentionInfo.mentionText : (levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || targetKey.split('@')[0]));
         const tier = getAuraTier(user.auraPoints);
         const titleLine = formatNameWithTitle(displayName, user.auraPoints, isGroup);
         const drawn = user.dailyMissions?.drawnMissions || [];
@@ -1137,7 +1140,6 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const done = completed.includes(id);
             text += `${done ? '✅' : '⬜'} ${cfg?.label || id}: ${done ? 'concluída' : `${val}/${cfg?.target ?? 1}`}\n`;
         });
-        const mentionInfo = targetKey !== senderAuraKey ? mentionsController.processSingleMention(getJidForMention(targetKey), contactsCache) : null;
         await sock.sendMessage(chatId, {
             text,
             mentions: mentionInfo && mentionInfo.mentions?.length ? mentionInfo.mentions : undefined
