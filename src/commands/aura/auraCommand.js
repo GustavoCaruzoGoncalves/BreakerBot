@@ -522,7 +522,7 @@ async function checkAuraNegativeAndPunish(sock, chatId, number, contactsCache) {
     const mentionInfo = mentionsController.processSingleMention(getJidForMention(jid), contactsCache);
     await sock.sendMessage(chatId, {
         text: `${mentionInfo.mentionText} FARMOU AURA NEGATIVA, -1000 AURA 💀💀💀`,
-        mentions: mentionInfo.mentions
+        mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
     });
     auraSystem.addAuraPoints(number, -1000);
 }
@@ -666,7 +666,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const mentionInfo = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
         await sock.sendMessage(chatId, {
             text: `⚔️ Desafio de duelo! ${mentionInfo.mentionText} pode aceitar respondendo *!mog aceitar*. Quem mandar mais mensagens em 15 segundos vence e ganha 500 de aura.`,
-            mentions: mentionInfo.mentions
+            mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
         }, { quoted: msg });
         return;
     }
@@ -699,7 +699,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         setTimeout(() => {
             sock.sendMessage(chatId, {
                 text: `💀 *MOGNOW!* ${mentionInfo.mentionText} — *15 segundos*: quem mandar *mais mensagens* vence. Alvo ganha 500 de aura (e missão) se vencer; atacante ganha 5 se vencer.`,
-                mentions: mentionInfo.mentions
+                mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
             }).catch(() => {});
         }, MOGNOW_COUNTDOWN_SEC * 1000);
         mognowActive.set(chatId, { attackerKey, targetKey, gameStartsAt, gameEndsAt, countAttacker: 0, countTarget: 0 });
@@ -713,7 +713,9 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const targetAuraKey = getAuraKey(state.targetKey);
             const attackerMention = mentionsController.processSingleMention(getJidForMention(attackerAuraKey), contactsCache);
             const targetMention = mentionsController.processSingleMention(getJidForMention(targetAuraKey), contactsCache);
-            const mognowMentions = [...(attackerMention.mentions || []), ...(targetMention.mentions || [])].filter(Boolean);
+            const mognowMentions = [];
+            if (attackerMention.mentions && attackerMention.mentions.length > 0) mognowMentions.push(...attackerMention.mentions);
+            if (targetMention.mentions && targetMention.mentions.length > 0) mognowMentions.push(...targetMention.mentions);
             if (countTarget > countAttacker) {
                 auraSystem.addAuraPoints(targetAuraKey, 500);
                 const missionReward = auraSystem.hasMission(targetAuraKey, 'survive_attack') ? auraSystem.completeMission(targetAuraKey, 'survive_attack') : 0;
@@ -874,7 +876,9 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         addPraise(senderAuraKey, targetAuraKey);
         const senderMention = mentionsController.processSingleMention(getJidForMention(sender), contactsCache);
         const targetMention = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
-        const mentions = [...(senderMention.mentions || []), ...(targetMention.mentions || [])];
+        const mentions = [];
+        if (senderMention.mentions && senderMention.mentions.length > 0) mentions.push(...senderMention.mentions);
+        if (targetMention.mentions && targetMention.mentions.length > 0) mentions.push(...targetMention.mentions);
         await sock.sendMessage(chatId, {
             text: `🌟 ${senderMention.mentionText} elogiou ${targetMention.mentionText}! ${targetMention.mentionText} ganhou *+100* de aura.`,
             mentions: mentions.length ? mentions : undefined
@@ -894,7 +898,9 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         }
         const senderMention = mentionsController.processSingleMention(getJidForMention(sender), contactsCache);
         const targetMention = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
-        const mentions = [...(senderMention.mentions || []), ...(targetMention.mentions || [])];
+        const mentions = [];
+        if (senderMention.mentions && senderMention.mentions.length > 0) mentions.push(...senderMention.mentions);
+        if (targetMention.mentions && targetMention.mentions.length > 0) mentions.push(...targetMention.mentions);
         await sock.sendMessage(chatId, {
             text: `${senderMention.mentionText} está te provocando ${targetMention.mentionText}, não quer tentar farmar aura rsrs? 🔥💀🔥💀`,
             mentions: mentions.length ? mentions : undefined
@@ -936,7 +942,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         if (uniqueJids.length === 0) {
             await sock.sendMessage(chatId, {
                 text: `📋 Ninguém elogiou ${targetMention.mentionText} ainda.`,
-                mentions: targetMention.mentions
+                mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
             }, { quoted: msg });
             return;
         }
@@ -974,7 +980,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const targetMention = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
             await sock.sendMessage(chatId, {
                 text: `🩸 Você farmou *100* de aura de ${targetMention.mentionText}. Você ganhou *+100* de aura.`,
-                mentions: targetMention.mentions
+                mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
             }, { quoted: msg });
             await checkAuraNegativeAndPunish(sock, chatId, targetAuraKey, contactsCache);
         } else {
