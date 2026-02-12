@@ -145,7 +145,14 @@ function getCanonicalUserKey(jid) {
     if (!jid || !fs.existsSync(USERS_LEVELS_PATH)) return null;
     try {
         const usersData = JSON.parse(fs.readFileSync(USERS_LEVELS_PATH, 'utf8'));
-        if (usersData[jid]) return jid;
+        if (usersData[jid]) {
+            for (const [savedJid, userData] of Object.entries(usersData)) {
+                if (savedJid === jid) continue;
+                if (typeof savedJid === 'string' && savedJid.includes('@') && userData && userData.jid === jid)
+                    return savedJid;
+            }
+            return jid;
+        }
         for (const [savedJid, userData] of Object.entries(usersData)) {
             if (userData.jid === jid) return savedJid;
         }
