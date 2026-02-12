@@ -230,7 +230,8 @@ function defaultAuraData() {
         },
         lastRitualDate: null,
         lastTreinarAt: null,
-        lastDominarAt: null
+        lastDominarAt: null,
+        negativeFarmPunished: false
     };
 }
 
@@ -295,6 +296,7 @@ class AuraSystem {
             usersData[number].aura.dailyMissions.drawnMissions = this.drawDailyMissions();
         }
         const aura = usersData[number].aura;
+        if (aura.negativeFarmPunished === undefined) aura.negativeFarmPunished = false;
         this.maybeResetDailyMissions(aura);
         return aura;
     }
@@ -430,6 +432,13 @@ class AuraSystem {
         writeUsersDataForAura(usersData);
     }
 
+    setNegativeFarmPunished(number, value) {
+        const usersData = readUsersDataForAura();
+        this.initUser(usersData, number);
+        if (usersData[number]?.aura) usersData[number].aura.negativeFarmPunished = value;
+        writeUsersDataForAura(usersData);
+    }
+
     getPendingMogByChat() {
         const usersData = readUsersDataForAura();
         const global = usersData[AURA_GLOBAL_KEY];
@@ -527,6 +536,8 @@ async function checkAuraNegativeAndPunish(sock, chatId, number, contactsCache) {
     if (!user) return;
     const aura = user.auraPoints ?? 0;
     if (aura >= 0) return;
+    // Só pode perder aura por farm negativo uma vez
+    if (user.negativeFarmPunished) return;
     const jid = number.includes('@') ? number : getJidFromNumber(number);
     const mentionInfo = mentionsController.processSingleMention(getJidForMention(jid), contactsCache);
     await sock.sendMessage(chatId, {
@@ -534,6 +545,8 @@ async function checkAuraNegativeAndPunish(sock, chatId, number, contactsCache) {
         mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
     });
     auraSystem.addAuraPoints(number, -1000);
+    // Marca que já foi punido por farm negativo — não pode acontecer de novo
+    auraSystem.setNegativeFarmPunished(number, true);
 }
 
 async function endMogDuel(sock, chatId, duel, contactsCache = {}) {
