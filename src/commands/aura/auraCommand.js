@@ -146,16 +146,25 @@ function getCanonicalUserKey(jid) {
     try {
         const usersData = JSON.parse(fs.readFileSync(USERS_LEVELS_PATH, 'utf8'));
         if (usersData[jid]) {
+            // Se já é uma chave @s.whatsapp.net, ela É a canônica — retorna direto
+            if (jid.endsWith('@s.whatsapp.net')) return jid;
+            // Se é um LID, procura a chave @s.whatsapp.net correspondente
             for (const [savedJid, userData] of Object.entries(usersData)) {
                 if (savedJid === jid) continue;
-                if (typeof savedJid === 'string' && savedJid.includes('@') && userData && userData.jid === jid)
+                if (savedJid.endsWith('@s.whatsapp.net') && userData && userData.jid === jid)
                     return savedJid;
             }
             return jid;
         }
+        // Se não existe como chave, procura pelo campo .jid, preferindo chaves @s.whatsapp.net
+        let fallback = null;
         for (const [savedJid, userData] of Object.entries(usersData)) {
-            if (userData.jid === jid) return savedJid;
+            if (userData.jid === jid) {
+                if (savedJid.endsWith('@s.whatsapp.net')) return savedJid;
+                if (!fallback) fallback = savedJid;
+            }
         }
+        if (fallback) return fallback;
         const phoneNumber = jid.split('@')[0].split(':')[0];
         const possibleJid = `${phoneNumber}@s.whatsapp.net`;
         if (usersData[possibleJid]) return possibleJid;
