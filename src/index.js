@@ -20,6 +20,7 @@ const lyricsCommandBot = require('./commands/utility/lyricsCommand');
 const sendJsCommandBot = require('./commands/utility/sendJsCommand');
 const levelCommandBot = require('./commands/level/levelCommand');
 const auraCommandBot = require('./commands/aura/auraCommand');
+const handleAuraReaction = require('./commands/aura/auraCommand').handleAuraReaction;
 
 const logError = (error) => {
     const errorLogPath = path.join(__dirname, '..', 'data', 'logs', 'error.log');
@@ -91,6 +92,21 @@ async function connectBot() {
                 startAuthMessageProcessor(sock);
             }
         });        
+
+        sock.ev.on('messages.reaction', async (reactions) => {
+            try {
+                if (Array.isArray(reactions)) {
+                    for (const item of reactions) {
+                        await handleAuraReaction(sock, item);
+                    }
+                } else if (reactions) {
+                    await handleAuraReaction(sock, reactions);
+                }
+            } catch (err) {
+                console.error('Erro ao processar reação (aura):', err);
+                logError(err);
+            }
+        });
 
         sock.ev.on('messages.upsert', async (messages) => {
             try {

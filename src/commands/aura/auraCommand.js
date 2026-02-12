@@ -58,7 +58,7 @@ const RANDOM_EVENTS = [
     { id: 'oferenda', chance: 0.08, message: '👑 *Os deuses deixaram uma oferenda!* Quem digitar *!aceitar* primeiro ganha *300* de aura.', command: '!aceitar', type: 'first', durationMs: 60000, effect: { type: 'aura', amount: 300 } },
     { id: 'pocao', chance: 0.06, message: '🧪 *Uma poção brilhante apareceu!* Primeiro a digitar *!beber* ganha *80* de aura.', command: '!beber', type: 'first', durationMs: 40000, effect: { type: 'aura', amount: 80 } },
     { id: 'espirito', chance: 0.05, message: '👻 *O espírito do grupo se manifesta!* Todos que digitarem *!invocar* em 1 minuto ganham *30* de aura.', command: '!invocar', type: 'all', durationMs: 60000, effect: { type: 'aura', amount: 30 } },
-    { id: 'armadilha', chance: 0.04, message: '🕳️ *Uma armadilha sombria está ativa!* O primeiro a digitar *!tocar* *perde* *100* de aura. Cuidado!', command: '!tocar', type: 'first', durationMs: 50000, effect: { type: 'aura', amount: -100 } },
+    { id: 'armadilha', chance: 0.04, message: '🕳️ *Uma armadilha sombria está ativa!* O primeiro a digitar *!tocar* verá as *consequências*. Cuidado!', command: '!tocar', type: 'first', durationMs: 50000, effect: { type: 'aura', amount: -100 } },
     { id: 'fenda_maldita', chance: 0.03, message: '💀 *Uma fenda maldita se abre!* Quem digitar *!entrar* primeiro *perde* *150* de aura.', command: '!entrar', type: 'first', durationMs: 45000, effect: { type: 'aura', amount: -150 } },
     { id: 'caixa', chance: 0.03, message: '📦 *Uma caixa misteriosa apareceu!* O primeiro a digitar *!abrir* pode ganhar ou perder aura… (sorte ou azar!)', command: '!abrir', type: 'first', durationMs: 50000, effect: { type: 'aura_random', options: [100, 100, -80, -80, 200] } },
     { id: 'ruina', chance: 0.02, message: '🏛️ *Ruínas antigas emanam energia!* O primeiro a digitar *!explorar* arrisca: *+200* ou *-100* de aura.', command: '!explorar', type: 'first', durationMs: 55000, effect: { type: 'aura_random', options: [200, -100] } },
@@ -1196,7 +1196,34 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 }
 
+/**
+ * Trata reações recebidas pelo evento messages.reaction do Baileys.
+ * Reações não vêm em messages.upsert, então precisam deste handler.
+ * @param {object} item - { key, reaction }; reaction.key = chave da mensagem de reação (participant = quem reagiu), reaction.text = emoji
+ */
+async function handleAuraReaction(sock, item) {
+    const reaction = item?.reaction || item;
+    const msgKey = reaction?.key || item?.key;
+    if (!msgKey || msgKey.fromMe) return;
+    const chatId = msgKey.remoteJid;
+    if (!chatId) return;
+    const isGroup = chatId.endsWith('@g.us');
+    const sender = isGroup ? (msgKey.participant || msgKey.participantAlt) : chatId;
+    if (!sender) return;
+    const reactionText = reaction?.text || '';
+    if (reactionText !== '💀' && reactionText !== '☠️') return;
+    const senderAuraKey = getAuraKey(sender);
+    if (!senderAuraKey || !auraSystem.hasMission(senderAuraKey, 'reactions_500')) return;
+    const result = auraSystem.incrementProgress(senderAuraKey, 'reactions_500', 1);
+    if (result) {
+        await sock.sendMessage(chatId, {
+            text: `💀 Missão "Reaja 500x com 💀 ou ☠️" concluída! *+${result.reward}* aura.`
+        }).catch(() => {});
+    }
+}
+
 module.exports = auraCommandBot;
+module.exports.handleAuraReaction = handleAuraReaction;
 module.exports.auraSystem = auraSystem;
 module.exports.getUserIdNumber = getUserIdNumber;
 module.exports.getLevelUserData = getLevelUserData;
