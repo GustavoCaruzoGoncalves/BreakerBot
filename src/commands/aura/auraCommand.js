@@ -538,10 +538,10 @@ async function endMogDuel(sock, chatId, duel) {
         await sock.sendMessage(chatId, { text: `⏱ Empate! (${countFrom} x ${countTo} mensagens) Ninguém ganha aura.` });
         return;
     }
-    const winnerNum = getUserIdNumber(winnerKey);
     const winnerAuraKey = getAuraKey(winnerKey);
+    const winnerNum = getUserIdNumber(winnerAuraKey);
     const levelUser = getLevelUserData(winnerNum);
-    const winnerName = levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || winnerNum);
+    const winnerName = levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || winnerAuraKey.split('@')[0]);
     const winnerCount = winnerKey === fromKey ? countFrom : countTo;
     const loserCount = winnerKey === fromKey ? countTo : countFrom;
     auraSystem.addAuraPoints(winnerAuraKey, 500);
@@ -706,12 +706,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             mognowActive.delete(chatId);
             const countAttacker = state.countAttacker || 0;
             const countTarget = state.countTarget || 0;
-            const attackerNum = getUserIdNumber(state.attackerKey);
-            const targetNum = getUserIdNumber(state.targetKey);
             const attackerAuraKey = getAuraKey(state.attackerKey);
             const targetAuraKey = getAuraKey(state.targetKey);
-            const attackerName = getLevelUserData(attackerNum)?.customNameEnabled && getLevelUserData(attackerNum)?.customName ? getLevelUserData(attackerNum).customName : (getLevelUserData(attackerNum)?.pushName || attackerNum);
-            const targetName = getLevelUserData(targetNum)?.customNameEnabled && getLevelUserData(targetNum)?.customName ? getLevelUserData(targetNum).customName : (getLevelUserData(targetNum)?.pushName || targetNum);
+            const attackerNum = getUserIdNumber(attackerAuraKey);
+            const targetNum = getUserIdNumber(targetAuraKey);
+            const attackerLevelUser = getLevelUserData(attackerNum);
+            const targetLevelUser = getLevelUserData(targetNum);
+            const attackerName = attackerLevelUser?.customNameEnabled && attackerLevelUser?.customName ? attackerLevelUser.customName : (attackerLevelUser?.pushName || attackerAuraKey.split('@')[0]);
+            const targetName = targetLevelUser?.customNameEnabled && targetLevelUser?.customName ? targetLevelUser.customName : (targetLevelUser?.pushName || targetAuraKey.split('@')[0]);
             if (countTarget > countAttacker) {
                 auraSystem.addAuraPoints(targetAuraKey, 500);
                 const missionReward = auraSystem.hasMission(targetAuraKey, 'survive_attack') ? auraSystem.completeMission(targetAuraKey, 'survive_attack') : 0;
@@ -1006,7 +1008,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (messageType === 'reactionMessage') {
+    if (msg.message.reactionMessage) {
         const reactionText = msg.message.reactionMessage?.text || '';
         if (reactionText === '💀' || reactionText === '☠️') {
             if (auraSystem.hasMission(senderAuraKey, 'reactions_500')) {
@@ -1196,11 +1198,6 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 }
 
-/**
- * Trata reações recebidas pelo evento messages.reaction do Baileys.
- * Reações não vêm em messages.upsert, então precisam deste handler.
- * @param {object} item - { key, reaction }; reaction.key = chave da mensagem de reação (participant = quem reagiu), reaction.text = emoji
- */
 async function handleAuraReaction(sock, item) {
     const reaction = item?.reaction || item;
     const msgKey = reaction?.key || item?.key;
