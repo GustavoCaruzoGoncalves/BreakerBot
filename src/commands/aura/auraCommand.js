@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const mentionsController = require('../../controllers/mentionsController');
 
 const USERS_LEVELS_PATH = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
@@ -221,6 +222,7 @@ function defaultAuraData() {
     return {
         auraPoints: 0,
         stickerHash: null,
+        stickerDataUrl: null,
         character: null,
         dailyMissions: {
             lastResetDate: null,
@@ -297,6 +299,7 @@ class AuraSystem {
         }
         const aura = usersData[number].aura;
         if (aura.negativeFarmPunished === undefined) aura.negativeFarmPunished = false;
+        if (aura.stickerDataUrl === undefined) aura.stickerDataUrl = null;
         this.maybeResetDailyMissions(aura);
         return aura;
     }
@@ -367,6 +370,16 @@ class AuraSystem {
         const usersData = readUsersDataForAura();
         this.initUser(usersData, number);
         if (usersData[number]?.aura) usersData[number].aura.stickerHash = hash;
+        writeUsersDataForAura(usersData);
+    }
+
+    setStickerData(number, hash, dataUrl) {
+        const usersData = readUsersDataForAura();
+        this.initUser(usersData, number);
+        if (usersData[number]?.aura) {
+            usersData[number].aura.stickerHash = hash;
+            usersData[number].aura.stickerDataUrl = dataUrl || null;
+        }
         writeUsersDataForAura(usersData);
     }
 
@@ -1064,7 +1077,22 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '❌ Não foi possível obter o hash desta figurinha.' }, { quoted: msg });
             return;
         }
-        auraSystem.setStickerHash(senderAuraKey, hash);
+        try {
+            const buffer = await downloadMediaMessage(
+                { message: { stickerMessage: stickerMsg } },
+                'buffer'
+            );
+            if (buffer && Buffer.isBuffer(buffer)) {
+                const base64 = buffer.toString('base64');
+                const dataUrl = `data:image/webp;base64,${base64}`;
+                auraSystem.setStickerData(senderAuraKey, hash, dataUrl);
+            } else {
+                auraSystem.setStickerHash(senderAuraKey, hash);
+            }
+        } catch (err) {
+            console.error('[AURA] Erro ao baixar figurinha para base64:', err);
+            auraSystem.setStickerHash(senderAuraKey, hash);
+        }
         await sock.sendMessage(chatId, { text: '✅ Figurinha de aura definida! Use essa figurinha para ter chance de ganhar +100 de aura.' }, { quoted: msg });
         return;
     }
@@ -1219,9 +1247,29 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const hash = auraSystem.getStickerHashFromMessage(msg);
         if (hash) {
             const user = auraSystem.getUserAura(senderAuraKey);
-            if (user.stickerHash && user.stickerHash === hash && Math.random() < 0.5) {
-                const newTotal = auraSystem.addAuraPoints(senderAuraKey, 100);
-                await sock.sendMessage(chatId, { text: `✨ +100 de aura! Total: *${newTotal}*` }, { quoted: msg });
+            if (user.stickerHash && user.stickerHash === hash) {
+                if (!user.stickerDataUrl) {
+                    try {
+                        const stickerMsg = auraSystem.getStickerFromMessage(msg);
+                        if (stickerMsg) {
+                            const buffer = await downloadMediaMessage(
+                                { message: { stickerMessage: stickerMsg } },
+                                'buffer'
+                            );
+                            if (buffer && Buffer.isBuffer(buffer)) {
+                                const base64 = buffer.toString('base64');
+                                const dataUrl = `data:image/webp;base64,${base64}`;
+                                auraSystem.setStickerData(senderAuraKey, hash, dataUrl);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('[AURA] Erro ao capturar base64 da figurinha de aura:', err);
+                    }
+                }
+                if (Math.random() < 0.5) {
+                    const newTotal = auraSystem.addAuraPoints(senderAuraKey, 100);
+                    await sock.sendMessage(chatId, { text: `✨ +100 de aura! Total: *${newTotal}*` }, { quoted: msg });
+                }
             }
         }
         return;

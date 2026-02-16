@@ -1210,7 +1210,8 @@ app.get('/api/aura/ranking', (req, res) => {
                 userId,
                 auraPoints,
                 tierName: getAuraTier(auraPoints).name,
-                displayName: data.customNameEnabled && data.customName ? data.customName : (data.pushName || userId.split('@')[0])
+                displayName: data.customNameEnabled && data.customName ? data.customName : (data.pushName || userId.split('@')[0]),
+                character: data.aura.character ?? null
             });
         }
         entries.sort((a, b) => b.auraPoints - a.auraPoints);
@@ -1278,6 +1279,7 @@ app.get('/api/aura/users/:id', (req, res) => {
             aura: {
                 auraPoints: aura.auraPoints ?? 0,
                 stickerHash: aura.stickerHash ?? null,
+                stickerDataUrl: aura.stickerDataUrl ?? null,
                 character: aura.character ?? null,
                 hasStickerHash: !!(aura.stickerHash),
                 dailyMissions: aura.dailyMissions ?? null,
