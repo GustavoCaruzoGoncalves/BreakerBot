@@ -26,6 +26,31 @@ const auraCommandBot = require("./commands/aura/auraCommand");
 const handleAuraReaction =
   require("./commands/aura/auraCommand").handleAuraReaction;
 
+const noop = () => {};
+const silentLogger = {
+  level: "silent",
+  trace: noop,
+  debug: noop,
+  info: noop,
+  warn: noop,
+  error: noop,
+  fatal: noop,
+  child() { return silentLogger; },
+};
+
+const isTransientSocketError = (err) => {
+  const msg = err?.message || "";
+  const cause = err?.cause?.code || "";
+  return (
+    msg === "terminated" ||
+    cause === "ECONNRESET" ||
+    cause === "UND_ERR_SOCKET" ||
+    cause === "EPIPE" ||
+    cause === "ETIMEDOUT" ||
+    cause === "ECONNREFUSED"
+  );
+};
+
 const logError = (error) => {
   try {
     const errorLogPath = path.join(__dirname, "..", "data", "logs", "error.log");
@@ -38,11 +63,19 @@ const logError = (error) => {
 };
 
 process.on("uncaughtException", (err) => {
+  if (isTransientSocketError(err)) {
+    console.warn(`[Socket] Erro transiente ignorado: ${err.cause?.code || err.message}`);
+    return;
+  }
   console.error("Erro não capturado:", err);
   logError(err);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
+  if (isTransientSocketError(reason)) {
+    console.warn(`[Socket] Rejeição transiente ignorada: ${reason?.cause?.code || reason?.message}`);
+    return;
+  }
   console.error("Rejeição não tratada em:", promise, "Motivo:", reason);
   logError(reason);
 });
@@ -59,7 +92,11 @@ async function connectBot() {
       printQRInTerminal: false,
       version: [2, 3000, 1033893291],
       auth: state,
-      browser: ["Windows", "Google Chrome", "145.0.0"],
+      logger: silentLogger,
+      retryRequestDelayMs: 2000,
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 15000,
+      defaultQueryTimeoutMs: 60000,
     });
 
     sock.ev.on("creds.update", saveCreds);
