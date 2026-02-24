@@ -38,10 +38,10 @@ async function handleViewOnce(sock, { messages }) {
 
       if (isViewOnceImage) {
         const mimetype = imageMsg.mimetype || "image/jpeg";
-        await sock.sendMessage(chatId, { image: buffer, mimetype }, { quoted: msg });
+        await sock.sendMessage(chatId, { image: buffer, mimetype });
       } else {
         const mimetype = videoMsg.mimetype || "video/mp4";
-        await sock.sendMessage(chatId, { video: buffer, mimetype }, { quoted: msg });
+        await sock.sendMessage(chatId, { video: buffer, mimetype });
       }
     } catch (err) {
       console.error("[viewOnceHandler] Erro ao processar viewOnce:", err?.message || err);

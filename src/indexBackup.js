@@ -2,6 +2,7 @@ const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
 
+const { handleViewOnce } = require("./services/viewOnceHandler");
 const { startAuthMessageProcessor } = require("./services/authMessageSender");
 
 const imagesCommandsBot = require("./commands/media/imagesCommands");
@@ -80,7 +81,7 @@ const contactsCache = {};
 
 async function connectBot() {
   try {
-    const { makeWASocket, useMultiFileAuthState } = await import("@whiskeysockets/baileys");
+    const { makeWASocket, useMultiFileAuthState, Browsers } = await import("@whiskeysockets/baileys");
     const { state, saveCreds } = await useMultiFileAuthState(
       path.join(__dirname, "..", "auth_info"),
     );
@@ -89,6 +90,7 @@ async function connectBot() {
       printQRInTerminal: false,
       version: [2, 3000, 1033893291],
       auth: state,
+      browser: Browsers.android("13"),
       logger: silentLogger,
       retryRequestDelayMs: 2000,
       connectTimeoutMs: 60000,
@@ -174,6 +176,7 @@ async function connectBot() {
         console.log(JSON.stringify(messages, null, 2));
         console.log("========================================\n");
 
+        await handleViewOnce(sock, messages);
         await imagesCommandsBot(sock, messages);
         await audioCommandsBot(sock, messages);
         await jokesCommandsBot(sock, messages, contactsCache);
