@@ -27,9 +27,14 @@ const handleAuraReaction =
   require("./commands/aura/auraCommand").handleAuraReaction;
 
 const logError = (error) => {
-  const errorLogPath = path.join(__dirname, "..", "data", "logs", "error.log");
-  const errorMsg = `[${new Date().toISOString()}] ${error.stack || error.message || error}\n`;
-  fs.appendFileSync(errorLogPath, errorMsg);
+  try {
+    const errorLogPath = path.join(__dirname, "..", "data", "logs", "error.log");
+    fs.mkdirSync(path.dirname(errorLogPath), { recursive: true });
+    const errorMsg = `[${new Date().toISOString()}] ${error.stack || error.message || error}\n`;
+    fs.appendFileSync(errorLogPath, errorMsg);
+  } catch (e) {
+    console.error("Falha ao gravar log de erro:", e.message);
+  }
 };
 
 process.on("uncaughtException", (err) => {
