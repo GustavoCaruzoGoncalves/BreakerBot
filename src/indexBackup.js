@@ -1,7 +1,3 @@
-const {
-  makeWASocket,
-  useMultiFileAuthState,
-} = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
@@ -84,6 +80,7 @@ const contactsCache = {};
 
 async function connectBot() {
   try {
+    const { makeWASocket, useMultiFileAuthState } = await import("@whiskeysockets/baileys");
     const { state, saveCreds } = await useMultiFileAuthState(
       path.join(__dirname, "..", "auth_info"),
     );

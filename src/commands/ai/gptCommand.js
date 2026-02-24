@@ -1,11 +1,17 @@
 const { default: axios } = require("axios");
-const { downloadMediaMessage } = require("@whiskeysockets/baileys");
 require("dotenv").config();
 const { admins } = require("../../config/adm");
+
+let baileysModule = null;
+async function getBaileys() {
+  if (!baileysModule) baileysModule = await import("@whiskeysockets/baileys");
+  return baileysModule;
+}
 
 const chatMemory = {};
 
 async function gptCommandBot(sock, { messages }) {
+    const { downloadMediaMessage } = await getBaileys();
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
 

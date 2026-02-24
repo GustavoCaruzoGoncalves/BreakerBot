@@ -20,7 +20,7 @@
   "type": "commonjs",
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys#android-browser",
     "axios": "^1.8.3",
     "child_process": "^1.0.2",
     "concurrently": "^9.1.2",

@@ -1,7 +1,12 @@
 const fs = require('fs');
 const path = require('path');
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const mentionsController = require('../../controllers/mentionsController');
+
+let baileysModule = null;
+async function getBaileys() {
+  if (!baileysModule) baileysModule = await import('@whiskeysockets/baileys');
+  return baileysModule;
+}
 
 const USERS_LEVELS_PATH = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
 
@@ -587,6 +592,7 @@ async function endMogDuel(sock, chatId, duel, contactsCache = {}) {
 }
 
 async function auraCommandBot(sock, { messages }, contactsCache = {}) {
+    const { downloadMediaMessage } = await getBaileys();
     const msg = messages[0];
     if (!msg?.message || !msg.key?.remoteJid) return;
 

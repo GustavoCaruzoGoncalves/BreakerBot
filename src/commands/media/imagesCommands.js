@@ -1,4 +1,3 @@
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const sharp = require('sharp');
 const path = require('path');
@@ -7,7 +6,14 @@ const ffmpeg = require('fluent-ffmpeg');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
+let baileysModule = null;
+async function getBaileys() {
+  if (!baileysModule) baileysModule = await import('@whiskeysockets/baileys');
+  return baileysModule;
+}
+
 async function imagesCommandsBot(sock, { messages }) {
+    const { downloadMediaMessage } = await getBaileys();
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
 

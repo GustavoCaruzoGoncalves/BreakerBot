@@ -1,12 +1,9 @@
-const {
-  makeWASocket,
-  useMultiFileAuthState,
-} = require("@whiskeysockets/baileys");
 const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
 
 const { startAuthMessageProcessor } = require("./services/authMessageSender");
+const { handleViewOnce } = require("./services/viewOnceHandler");
 
 const imagesCommandsBot = require("./commands/media/imagesCommands");
 const audioCommandsBot = require("./commands/media/audioCommands");
@@ -50,6 +47,10 @@ process.on("unhandledRejection", (reason, promise) => {
 const contactsCache = {};
 
 async function connectBot() {
+  const { makeWASocket, useMultiFileAuthState, Browsers } = await import(
+    "@whiskeysockets/baileys"
+  );
+
   try {
     const { state, saveCreds } = await useMultiFileAuthState(
       path.join(__dirname, "..", "auth_info"),
@@ -59,7 +60,7 @@ async function connectBot() {
       printQRInTerminal: false,
       version: [2, 3000, 1033893291],
       auth: state,
-      browser: ["Windows", "Google Chrome", "145.0.0"],
+      browser: Browsers.android("13"),
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -140,6 +141,7 @@ async function connectBot() {
         console.log(JSON.stringify(messages, null, 2));
         console.log("========================================\n");
 
+        await handleViewOnce(sock, messages);
         await imagesCommandsBot(sock, messages);
         await audioCommandsBot(sock, messages);
         await jokesCommandsBot(sock, messages, contactsCache);
