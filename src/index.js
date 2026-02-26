@@ -2,26 +2,32 @@ const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
 
-const { startAuthMessageProcessor } = require("./services/authMessageSender");
 const { handleViewOnce } = require("./services/viewOnceHandler");
 
-const imagesCommandsBot = require("./commands/media/imagesCommands");
-const audioCommandsBot = require("./commands/media/audioCommands");
-const jokesCommandsBot = require("./commands/fun/jokesCommands");
-const gamesCommandsBot = require("./commands/fun/gamesCommands");
-const amigoSecretoCommandBot = require("./commands/fun/amigoSecretoCommand");
-const menuCommandBot = require("./commands/utility/menuCommand");
-const featureCommandsBot = require("./commands/utility/featureCommands");
-const gptCommandBot = require("./commands/ai/gptCommand");
-const grokCommandBot = require("./commands/ai/grokCommand");
-const zhipuCommandsBot = require("./commands/ai/zhipuCommands");
-const banCommandBot = require("./commands/moderation/banCommand");
-const lyricsCommandBot = require("./commands/utility/lyricsCommand");
-const sendJsCommandBot = require("./commands/utility/sendJsCommand");
-const levelCommandBot = require("./commands/level/levelCommand");
-const auraCommandBot = require("./commands/aura/auraCommand");
-const handleAuraReaction =
-  require("./commands/aura/auraCommand").handleAuraReaction;
+const noop = () => {};
+const silentLogger = {
+  level: "silent",
+  trace: noop,
+  debug: noop,
+  info: noop,
+  warn: noop,
+  error: noop,
+  fatal: noop,
+  child() { return silentLogger; },
+};
+
+const isTransientSocketError = (err) => {
+  const msg = err?.message || "";
+  const cause = err?.cause?.code || "";
+  return (
+    msg === "terminated" ||
+    cause === "ECONNRESET" ||
+    cause === "UND_ERR_SOCKET" ||
+    cause === "EPIPE" ||
+    cause === "ETIMEDOUT" ||
+    cause === "ECONNREFUSED"
+  );
+};
 
 const logError = (error) => {
   try {
@@ -35,23 +41,26 @@ const logError = (error) => {
 };
 
 process.on("uncaughtException", (err) => {
+  if (isTransientSocketError(err)) {
+    console.warn(`[Socket] Erro transiente ignorado: ${err.cause?.code || err.message}`);
+    return;
+  }
   console.error("Erro não capturado:", err);
   logError(err);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
+  if (isTransientSocketError(reason)) {
+    console.warn(`[Socket] Rejeição transiente ignorada: ${reason?.cause?.code || reason?.message}`);
+    return;
+  }
   console.error("Rejeição não tratada em:", promise, "Motivo:", reason);
   logError(reason);
 });
 
-const contactsCache = {};
-
 async function connectBot() {
-  const { makeWASocket, useMultiFileAuthState, Browsers } = await import(
-    "@whiskeysockets/baileys"
-  );
-
   try {
+    const { makeWASocket, useMultiFileAuthState, Browsers } = await import("@whiskeysockets/baileys");
     const { state, saveCreds } = await useMultiFileAuthState(
       path.join(__dirname, "..", "auth_info"),
     );
@@ -61,28 +70,14 @@ async function connectBot() {
       version: [2, 3000, 1033893291],
       auth: state,
       browser: Browsers.android("13"),
+      logger: silentLogger,
+      retryRequestDelayMs: 2000,
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 15000,
+      defaultQueryTimeoutMs: 60000,
     });
 
     sock.ev.on("creds.update", saveCreds);
-
-    sock.ev.on("contacts.update", (updates) => {
-      updates.forEach((contact) => {
-        if (contact.id) {
-          if (!contactsCache[contact.id]) {
-            contactsCache[contact.id] = {};
-          }
-          Object.assign(contactsCache[contact.id], contact);
-        }
-      });
-    });
-
-    sock.ev.on("contacts.upsert", (contacts) => {
-      contacts.forEach((contact) => {
-        if (contact.id) {
-          contactsCache[contact.id] = contact;
-        }
-      });
-    });
 
     sock.ev.on("connection.update", async (update) => {
       const { connection, lastDisconnect, qr } = update;
@@ -114,22 +109,6 @@ async function connectBot() {
         }
       } else if (connection === "open") {
         console.log("Bot conectado com sucesso!");
-        startAuthMessageProcessor(sock);
-      }
-    });
-
-    sock.ev.on("messages.reaction", async (reactions) => {
-      try {
-        if (Array.isArray(reactions)) {
-          for (const item of reactions) {
-            await handleAuraReaction(sock, item);
-          }
-        } else if (reactions) {
-          await handleAuraReaction(sock, reactions);
-        }
-      } catch (err) {
-        console.error("Erro ao processar reação (aura):", err);
-        logError(err);
       }
     });
 
@@ -142,21 +121,6 @@ async function connectBot() {
         console.log("========================================\n");
 
         await handleViewOnce(sock, messages);
-        await imagesCommandsBot(sock, messages);
-        await audioCommandsBot(sock, messages);
-        await jokesCommandsBot(sock, messages, contactsCache);
-        await featureCommandsBot(sock, messages);
-        await gamesCommandsBot(sock, messages);
-        await amigoSecretoCommandBot(sock, messages, contactsCache);
-        await menuCommandBot(sock, messages);
-        await gptCommandBot(sock, messages);
-        await grokCommandBot(sock, messages);
-        await lyricsCommandBot(sock, messages);
-        await banCommandBot(sock, messages);
-        await zhipuCommandsBot(sock, messages);
-        await sendJsCommandBot(sock, messages);
-        await levelCommandBot(sock, messages, contactsCache);
-        await auraCommandBot(sock, messages, contactsCache);
       } catch (err) {
         console.error("Erro ao processar mensagem:", err);
         logError(err);
