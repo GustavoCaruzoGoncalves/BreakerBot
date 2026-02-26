@@ -1,18 +1,14 @@
 {
-  "name": "breakerbot",
+  "name": "viewoncebot",
   "version": "1.0.0",
-  "description": "",
+  "description": "Bot que encaminha mídias viewOnce para uma DM configurada",
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/index.js",
-    "start:api": "node src/api/server.js",
-    "dev": "concurrently --names \"BOT,API\" --prefix-colors \"green,blue\" \"npm run start\" \"npm run start:api\"",
-    "startwapi": "concurrently --names \"BOT,API\" --prefix-colors \"green,blue\" \"npm run start\" \"npm run start:api\"",
-    "server": "pm2 start src/index.js --name BreakerBot --env production && pm2 start src/api/server.js --name BreakerBotAPI --env production",
-    "stop": "pm2 stop BreakerBot BreakerBotAPI",
-    "restart": "pm2 restart BreakerBot BreakerBotAPI",
-    "logs": "pm2 logs"
+    "server": "pm2 start src/index.js --name ViewOnceBot --env production",
+    "stop": "pm2 stop ViewOnceBot",
+    "restart": "pm2 restart ViewOnceBot",
+    "logs": "pm2 logs ViewOnceBot"
   },
   "keywords": [],
   "author": "",
@@ -20,7 +16,6 @@
   "type": "commonjs",
   "dependencies": {
     "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys#android-browser",
-    "concurrently": "^9.1.2",
     "dotenv": "^17.3.1",
     "pm2": "^6.0.5",
     "qrcode-terminal": "^0.12.0"

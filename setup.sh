@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Setup script for BreakerBot
+# Setup script for ViewOnceBot
 set -e
 
 # Check prerequisites
@@ -28,19 +28,16 @@ if [ ! -f .env ]; then
   if [ ! -f .env.example ]; then
     cat <<'EOE' > .env.example
 # Copy this file to '.env' and fill in your credentials
-OPENAI_API_KEY=
-XAI_API_KEY=
-GENIUS_API_KEY=
-# Comma-separated list of WhatsApp numbers without spaces
-ADMINS=
+# Número que receberá as mídias viewOnce (apenas dígitos, ex: 5511999999999)
+VIEWONCE_DM_NUMBER=
 EOE
   fi
   cp .env.example .env
-  echo "Created default .env file. Edit it with your API keys and admin numbers." 
+  echo "Created default .env file. Edit VIEWONCE_DM_NUMBER with the number that will receive viewOnce media." 
 fi
 
 cat <<'EOM'
 Setup complete!
 Run 'npm start' to authenticate the bot.
-After authentication, use 'npm run server' to run BreakerBot with pm2.
+After authentication, use 'npm run server' to run ViewOnceBot with pm2.
 EOM
