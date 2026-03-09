@@ -7,8 +7,8 @@ const USERS_LEVELS_PATH = path.resolve(__dirname, '..', '..', '..', 'levels_info
 
 const MISSION_IDS = ['messages_500', 'reactions_500', 'duel_win', 'survive_attack', 'send_media', 'help_someone'];
 const MISSION_CONFIG = {
-    messages_500:   { target: 500, reward: 1000, label: 'Mande 500 mensagens' },
-    reactions_500:  { target: 500, reward: 2000, label: 'Reaja 500x com 💀 ou ☠️' },
+    messages_500:   { target: 50, reward: 1000, label: 'Mande 500 mensagens' },
+    reactions_500:  { target: 20, reward: 2000, label: 'Reaja 20x com 💀 ou ☠️' },
     duel_win:       { target: 1,   reward: 1000, label: 'Vença 1 duelo (!mog)' },
     survive_attack: { target: 1,   reward: 2000, label: 'Sobreviva a um ataque (!mognow)' },
     send_media:     { target: 1,   reward: 200,  label: 'Envie mídia (figurinha/vídeo/imagem/doc)' },
@@ -21,7 +21,8 @@ const AURA_TIERS = [
     { minPoints: 5000,  name: 'Sigma' },
     { minPoints: 2000,  name: 'Dominante' },
     { minPoints: 500,   name: 'Presença' },
-    { minPoints: 0,     name: 'NPC' }
+    { minPoints: 0,     name: 'NPC' },
+    { minPoints: -999999999,   name: 'Sugador de aura ☠️' }
 ];
 
 function getAuraTier(auraPoints) {
@@ -1052,15 +1053,6 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (msg.message.reactionMessage) {
-        const reactionText = msg.message.reactionMessage?.text || '';
-        if (reactionText === '💀' || reactionText === '☠️') {
-            if (auraSystem.hasMission(senderAuraKey, 'reactions_500')) {
-                const result = auraSystem.incrementProgress(senderAuraKey, 'reactions_500', 1);
-                if (result) {
-                    await sock.sendMessage(chatId, { text: `💀 Missão "Reaja 500x com 💀 ou ☠️" concluída! *+${result.reward}* aura.` }, { quoted: msg });
-                }
-            }
-        }
         return;
     }
 
