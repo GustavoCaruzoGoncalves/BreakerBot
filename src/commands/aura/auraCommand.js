@@ -7,7 +7,7 @@ const USERS_LEVELS_PATH = path.resolve(__dirname, '..', '..', '..', 'levels_info
 
 const MISSION_IDS = ['messages_500', 'reactions_500', 'duel_win', 'survive_attack', 'send_media', 'help_someone'];
 const MISSION_CONFIG = {
-    messages_500:   { target: 50, reward: 1000, label: 'Mande 500 mensagens' },
+    messages_500:   { target: 50, reward: 1000, label: 'Mande 50 mensagens' },
     reactions_500:  { target: 20, reward: 2000, label: 'Reaja 20x com 💀 ou ☠️' },
     duel_win:       { target: 1,   reward: 1000, label: 'Vença 1 duelo (!mog)' },
     survive_attack: { target: 1,   reward: 2000, label: 'Sobreviva a um ataque (!mognow)' },
@@ -1041,7 +1041,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     if (auraSystem.hasMission(senderAuraKey, 'messages_500')) {
         const result = auraSystem.incrementProgress(senderAuraKey, 'messages_500', 1);
         if (result) {
-            await sock.sendMessage(chatId, { text: `📬 Missão "Mande 500 mensagens" concluída! *+${result.reward}* aura.` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `📬 Missão "Mande 50 mensagens" concluída! *+${result.reward}* aura.` }, { quoted: msg });
         }
     }
 
@@ -1229,7 +1229,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         text += `Comandos que podem aparecer nos eventos: ${eventCommands}\n`;
         text += `Alguns eventos: primeiro a digitar ganha; outros: todos que digitarem no tempo ganham. Alguns dão aura negativa — cuidado!\n\n`;
         text += `—— *MISSÕES DIÁRIAS* ——\n`;
-        text += `Todo dia você recebe 3 missões entre: Mande 500 mensagens, Reaja 500x com 💀/☠️, Vença 1 duelo (!mog), Sobreviva a um ataque (!mognow), Envie mídia, Ajude alguém (!respeito). Concluir dá bônus de aura. Reset às 00:00.\n\n`;
+        text += `Todo dia você recebe 3 missões entre: Mande 50 mensagens, Reaja 20x com 💀/☠️, Vença 1 duelo (!mog), Sobreviva a um ataque (!mognow), Envie mídia, Ajude alguém (!respeito). Concluir dá bônus de aura. Reset às 00:00.\n\n`;
         text += `_Use *!aura info me* para ver seu perfil completo._`;
         await sock.sendMessage(chatId, { text }, { quoted: msg });
         return;
@@ -1284,7 +1284,7 @@ async function handleAuraReaction(sock, item) {
     const result = auraSystem.incrementProgress(senderAuraKey, 'reactions_500', 1);
     if (result) {
         await sock.sendMessage(chatId, {
-            text: `💀 Missão "Reaja 500x com 💀 ou ☠️" concluída! *+${result.reward}* aura.`
+            text: `💀 Missão "Reaja 20x com 💀 ou ☠️" concluída! *+${result.reward}* aura.`
         }).catch(() => {});
     }
 }
