@@ -14,20 +14,20 @@ async function grokCommandBot(sock, { messages }) {
     const chatId = msg.key.remoteJid;
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-    if (text.startsWith("!grokimg")) {
-        const query = text.replace("!grokimg", "").trim();
+    if (text.startsWith("!grokimg") || text.startsWith("#grokimg")) {
+        const query = text.replace("!grokimg", "").replace("#grokimg", "").trim();
         const imageUrl = await askGrokImage(query);
         if (imageUrl) {
             await sock.sendMessage(chatId, { image: { url: imageUrl }, caption: "Aqui está sua imagem gerada!" });
         } else {
             await sock.sendMessage(chatId, { text: "Não foi possível gerar a imagem." });
         }
-    } else if (text.startsWith("!grok ")) {
-        const query = text.replace("!grok", "").trim();
+    } else if (text.startsWith("!grok ") || text.startsWith("#grok ")) {
+        const query = text.replace("!grok", "").replace("#grok", "").trim();
         const response = await askGrok(query);
         await sock.sendMessage(chatId, { text: response });
-    } else if (text.startsWith("!grokangry ")) {
-        const query = text.replace("!grokangry", "").trim();
+    } else if (text.startsWith("!grokangry ") || text.startsWith("#grokangry ")) {
+        const query = text.replace("!grokangry", "").replace("#grokangry", "").trim();
         const response = await askGrokAngry(query);
         await sock.sendMessage(chatId, { text: response });
     }

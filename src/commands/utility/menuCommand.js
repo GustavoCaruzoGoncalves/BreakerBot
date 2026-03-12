@@ -1,3 +1,5 @@
+const { PREFIX } = require("../../config/prefix");
+
 async function menuCommandBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
@@ -8,19 +10,28 @@ async function menuCommandBot(sock, { messages }) {
 
     console.log(`[DEBUG] Mensagem recebida de ${sender}: ${textMessage}`);
 
-    if (textMessage.toLowerCase().startsWith("!menu") || textMessage.toLowerCase().startsWith("!ajuda") || textMessage.toLowerCase().startsWith("!help") || textMessage.toLowerCase().startsWith("!sobre")) {
+    const lower = textMessage.toLowerCase();
+    const prefixLower = PREFIX.toLowerCase();
+
+    if (
+        lower.startsWith(prefixLower + "menu") ||
+        lower.startsWith(prefixLower + "ajuda") ||
+        lower.startsWith(prefixLower + "help") ||
+        lower.startsWith(prefixLower + "sobre")
+    ) {
         console.log("[DEBUG] Enviando menu de comandos...");
+        const p = PREFIX;
         const menuText = `📌 *Menu de Comandos:*
 
 🎛️ *Comandos Gerais:*
-✅ *!menu* - Exibe esta lista de comandos.
+✅ *${p}menu* - Exibe esta lista de comandos.
 
 🖼️ *Figurinhas e Mídia:*
-✅ *!sticker* - Cria uma figurinha a partir de uma imagem, vídeo ou GIF.
-✅ *!fsticker* - Cria uma figurinha quadrada (512x512) a partir de uma imagem, vídeo ou GIF.
-✅ *!toimg* - Converte uma figurinha de volta para imagem PNG.
-✅ *!play <nome ou link>* - Baixa uma música do YouTube e envia no WhatsApp.
-✅ *!playmp4 <nome ou link>* - Baixa um vídeo do YouTube e envia no WhatsApp.
+✅ *${p}sticker* - Cria uma figurinha a partir de uma imagem, vídeo ou GIF.
+✅ *${p}fsticker* - Cria uma figurinha quadrada (512x512) a partir de uma imagem, vídeo ou GIF.
+✅ *${p}toimg* - Converte uma figurinha de volta para imagem PNG.
+✅ *${p}play <nome ou link>* - Baixa uma música do YouTube e envia no WhatsApp.
+✅ *${p}playmp4 <nome ou link>* - Baixa um vídeo do YouTube e envia no WhatsApp.
 
 📊 *Comandos de zueiras:*
 ✅ *!ship* - Calcula a % de duas pessoas namorarem.
@@ -34,11 +45,11 @@ async function menuCommandBot(sock, { messages }) {
 ✅ *!fazol* ou *!FAZOL* - FAZ O L CARALHOOOOOOOOOO.
 
 🤖 *IA, Bots e APIs:*
-✅ *!gpt3* - Fale com o Chat GPT-3 sem contexto (respostas únicas).
-✅ *!gpt4* - Fale com o Chat GPT-4 com contexto (ele lembra o que foi dito) ou use o comando marcando uma imagem para ele fazer uma análise.
-✅ *!grok* - Fale com o Grok.
-✅ *!grokangry* - Fale com o Grok sendo rude.
-✅ *!grokimg* - Gere imagens com o Grok.
+✅ *#gpt3* - Fale com o Chat GPT-3 sem contexto (respostas únicas).
+✅ *#gpt4* - Fale com o Chat GPT-4 com contexto (ele lembra o que foi dito) ou use o comando marcando uma imagem para ele fazer uma análise.
+✅ *#grok* - Fale com o Grok.
+✅ *#grokangry* - Fale com o Grok sendo rude.
+✅ *#grokimg* - Gere imagens com o Grok.
 ✅ *!lyrics* "Cantor" "Música" - Pesquisa músicas.
 ✅ *!lyrics* escolha (numero) - Retorna a letra da música escolhida.
 
@@ -46,11 +57,11 @@ async function menuCommandBot(sock, { messages }) {
 ✅ *!trivia* - Brinque de acertar respostas. Use *!trivia start* para começar e *!trivia resposta <sua resposta>* para responder.
 
 🎯 *Sistema de Níveis:*
-✅ *!niveis* - Explica como funciona o sistema de níveis.
-✅ *!me* - Mostra seu status atual (nível, XP, elo, prestígio).
-✅ *!elos* - Lista todos os elos disponíveis.
-✅ *!prestigio* - Faz prestígio (nível 10+).
-✅ *!ranking* - Mostra o top 10 usuários.
+✅ *${p}niveis* - Explica como funciona o sistema de níveis.
+✅ *${p}me* - Mostra seu status atual (nível, XP, elo, prestígio).
+✅ *${p}elos* - Lista todos os elos disponíveis.
+✅ *${p}prestigio* - Faz prestígio (nível 10+).
+✅ *${p}ranking* - Mostra o top 10 usuários.
 `;
 
         await sock.sendMessage(sender, { text: menuText }, { quoted: msg });

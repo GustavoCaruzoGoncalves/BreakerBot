@@ -30,7 +30,7 @@ async function zhipuCommandBot(sock, { messages }) {
         chatMemory[chatId] = [];
     }
 
-    if (text && !text.startsWith("!zhipu")) {
+    if (text && !text.startsWith("!zhipu") && !text.startsWith("#zhipu")) {
         chatMemory[chatId].push({ role: "user", content: text });
 
         if (chatMemory[chatId].length > 30) {
@@ -51,8 +51,8 @@ async function zhipuCommandBot(sock, { messages }) {
         return;
     }
 
-    if (text.startsWith("!zhipu")) {
-        let userPrompt = text.replace("!zhipu", "").trim();
+    if (text.startsWith("!zhipu") || text.startsWith("#zhipu")) {
+        let userPrompt = text.replace("!zhipu", "").replace("#zhipu", "").trim();
         let imageBuffer = null;
 
         const promptMessages = [];
@@ -91,7 +91,7 @@ async function zhipuCommandBot(sock, { messages }) {
 
         if (userPrompt.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "❌ Digite uma pergunta junto com `!zhipu`."
+                text: "❌ Digite uma pergunta junto com `#zhipu`."
             });
             return;
         }

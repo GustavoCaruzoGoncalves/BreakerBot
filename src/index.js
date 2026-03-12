@@ -23,6 +23,7 @@ const lyricsCommandBot = require("./commands/utility/lyricsCommand");
 const sendJsCommandBot = require("./commands/utility/sendJsCommand");
 const levelCommandBot = require("./commands/level/levelCommand");
 const auraCommandBot = require("./commands/aura/auraCommand");
+const memeCommandsBot = require("./commands/media/memeCommands");
 const handleAuraReaction =
   require("./commands/aura/auraCommand").handleAuraReaction;
 
@@ -141,6 +142,7 @@ async function connectBot() {
         console.log("========================================\n");
 
         await imagesCommandsBot(sock, messages);
+        await memeCommandsBot(sock, messages);
         await audioCommandsBot(sock, messages);
         await jokesCommandsBot(sock, messages, contactsCache);
         await featureCommandsBot(sock, messages);

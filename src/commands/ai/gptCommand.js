@@ -30,7 +30,13 @@ async function gptCommandBot(sock, { messages }) {
         chatMemory[chatId] = [];
     }
 
-    if (text && !text.startsWith("!gpt5") && !text.startsWith("!gpt")) {
+    if (
+        text &&
+        !text.startsWith("!gpt5") &&
+        !text.startsWith("!gpt") &&
+        !text.startsWith("#gpt5") &&
+        !text.startsWith("#gpt")
+    ) {
         chatMemory[chatId].push({ role: "user", content: text });
 
         if (chatMemory[chatId].length > 30) {
@@ -52,8 +58,18 @@ async function gptCommandBot(sock, { messages }) {
     }
 
     // ===================== GPT-5 NANO (ATIVO) =====================
-    if (text.startsWith("!gpt5") || text.startsWith("!gpt ")) {
-        let userPrompt = text.replace("!gpt5", "").replace("!gpt ", "").trim();
+    if (
+        text.startsWith("!gpt5") ||
+        text.startsWith("!gpt ") ||
+        text.startsWith("#gpt5") ||
+        text.startsWith("#gpt ")
+    ) {
+        let userPrompt = text
+            .replace("!gpt5", "")
+            .replace("!gpt ", "")
+            .replace("#gpt5", "")
+            .replace("#gpt ", "")
+            .trim();
         let imageBuffer = null;
 
         const promptMessages = [];
@@ -92,7 +108,7 @@ async function gptCommandBot(sock, { messages }) {
 
         if (userPrompt.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "❌ Digite uma pergunta junto com `!gpt5` ou `!gpt`."
+                text: "❌ Digite uma pergunta junto com `#gpt5` ou `#gpt`."
             });
             return;
         }

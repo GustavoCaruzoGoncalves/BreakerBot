@@ -1,4 +1,5 @@
 const { admins } = require("../../config/adm");
+const { PREFIX } = require("../../config/prefix");
 
 async function banCommandBot(sock, { messages }) {
     const msg = messages[0];
@@ -16,17 +17,17 @@ async function banCommandBot(sock, { messages }) {
 
     const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
 
-    if (text.startsWith("!ban")) {
+    if (text.startsWith(PREFIX + "ban")) {
         if (!isAdmin) {
             await sock.sendMessage(groupId, {
-                text: "❌ Você não tem permissão para usar este comando. Somente administradores podem usar `!ban`."
+                text: "❌ Você não tem permissão para usar este comando. Somente administradores podem usar `#ban`."
             });
             return;
         }
 
         if (!mentionedJid) {
             await sock.sendMessage(groupId, {
-                text: "❌ Você precisa marcar alguém para banir. Exemplo: `!ban @usuario`"
+                text: "❌ Você precisa marcar alguém para banir. Exemplo: `#ban @usuario`"
             });
             return;
         }

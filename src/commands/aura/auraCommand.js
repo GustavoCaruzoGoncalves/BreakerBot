@@ -997,10 +997,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!aura farmar ')) {
+    if (textMessage.toLowerCase().startsWith('!aura farmar ') || textMessage.toLowerCase().startsWith('#aura farmar ')) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!aura farmar* marcando alguém: *!aura farmar @usuario*' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: '⚠️ Use *#aura farmar* marcando alguém: *#aura farmar @usuario*' }, { quoted: msg });
             return;
         }
         const targetAuraKey = getAuraKey(mentionedJid);
@@ -1056,11 +1056,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!aura figurinha')) {
+    if (textMessage.toLowerCase().startsWith('!aura figurinha') || textMessage.toLowerCase().startsWith('#aura figurinha')) {
         const stickerMsg = auraSystem.getStickerFromMessage(msg);
         if (!stickerMsg) {
             await sock.sendMessage(chatId, {
-                text: '⚠️ Envie *!aura figurinha* junto com uma figurinha ou respondendo a uma figurinha.'
+                text: '⚠️ Envie *#aura figurinha* junto com uma figurinha ou respondendo a uma figurinha.'
             }, { quoted: msg });
             return;
         }
@@ -1089,12 +1089,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!aura personagem')) {
-        const match = textMessage.match(/!aura\s+personagem\s+"([^"]+)"/i) || textMessage.match(/!aura\s+personagem\s+(.+)/i);
+    if (textMessage.toLowerCase().startsWith('!aura personagem') || textMessage.toLowerCase().startsWith('#aura personagem')) {
+        const match =
+            textMessage.match(/[!#]aura\s+personagem\s+"([^"]+)"/i) ||
+            textMessage.match(/[!#]aura\s+personagem\s+(.+)/i);
         const character = match ? (match[1] || '').trim() : '';
         if (!character) {
             await sock.sendMessage(chatId, {
-                text: '⚠️ Uso: *!aura personagem "nome do personagem"*'
+                text: '⚠️ Uso: *#aura personagem "nome do personagem"*'
             }, { quoted: msg });
             return;
         }
@@ -1104,7 +1106,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     const trimmedAura = textMessage.trim();
-    if (/^!aura missoes\s*$/i.test(trimmedAura) || /^!aura missões\s*$/i.test(trimmedAura)) {
+    if (
+        /^!aura missoes\s*$/i.test(trimmedAura) ||
+        /^!aura missões\s*$/i.test(trimmedAura) ||
+        /^#aura missoes\s*$/i.test(trimmedAura) ||
+        /^#aura missões\s*$/i.test(trimmedAura)
+    ) {
         const user = auraSystem.getUserAura(senderAuraKey);
         const drawn = user.dailyMissions?.drawnMissions || [];
         const completed = user.dailyMissions?.completedMissionIds || [];
@@ -1125,7 +1132,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (/^!aura\s+ranking\s*$/i.test(textMessage.trim()) || /^!aura\s+rank\s*$/i.test(textMessage.trim())) {
+    if (
+        /^!aura\s+ranking\s*$/i.test(textMessage.trim()) ||
+        /^!aura\s+rank\s*$/i.test(textMessage.trim()) ||
+        /^#aura\s+ranking\s*$/i.test(textMessage.trim()) ||
+        /^#aura\s+rank\s*$/i.test(textMessage.trim())
+    ) {
         const ranking = auraSystem.getAuraRanking(10);
         if (ranking.length === 0) {
             await sock.sendMessage(chatId, { text: '📈 Ninguém no ranking de aura ainda. Jogue para acumular pontos!' }, { quoted: msg });
@@ -1153,12 +1165,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().trim().startsWith('!aura info')) {
+    if (textMessage.toLowerCase().trim().startsWith('!aura info') || textMessage.toLowerCase().trim().startsWith('#aura info')) {
         const trimmed = textMessage.trim();
-        const isMe = /^!aura\s+info\s+me\s*$/i.test(trimmed);
+        const isMe = /^[!#]aura\s+info\s+me\s*$/i.test(trimmed);
         const mentionedJid = getMentionedJid(msg);
         if (!isMe && !mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!aura info me* para suas informações ou *!aura info @usuario* para ver de alguém.' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: '⚠️ Use *#aura info me* para suas informações ou *#aura info @usuario* para ver de alguém.' }, { quoted: msg });
             return;
         }
         const targetKey = isMe ? senderAuraKey : getAuraKey(mentionedJid);
@@ -1196,7 +1208,19 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     const lowerAura = textMessage.toLowerCase();
-    if (lowerAura === '!aura' || (lowerAura.startsWith('!aura ') && !lowerAura.includes('figurinha') && !lowerAura.includes('personagem') && !lowerAura.includes('missoes') && !lowerAura.includes('missões') && !lowerAura.includes('farmar') && !lowerAura.includes('ranking') && !lowerAura.includes('rank') && !lowerAura.includes('info'))) {
+    if (
+        lowerAura === '!aura' ||
+        lowerAura === '#aura' ||
+        ((lowerAura.startsWith('!aura ') || lowerAura.startsWith('#aura ')) &&
+            !lowerAura.includes('figurinha') &&
+            !lowerAura.includes('personagem') &&
+            !lowerAura.includes('missoes') &&
+            !lowerAura.includes('missões') &&
+            !lowerAura.includes('farmar') &&
+            !lowerAura.includes('ranking') &&
+            !lowerAura.includes('rank') &&
+            !lowerAura.includes('info'))
+    ) {
         const eventCommands = [...new Set(RANDOM_EVENTS.map(e => e.command))].sort().join(', ');
         let text = `✨ *SISTEMA DE AURA — GUIA COMPLETO* ✨\n\n`;
         text += `📌 *O que é:* Aura é a moeda/status do bot. Você ganha ou perde aura com comandos, missões e eventos. Seu *nível* (NPC, Presença, Dominante, Sigma, Entidade, Deus do chat) depende dos pontos.\n\n`;
@@ -1215,22 +1239,22 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         text += `—— *DUELOS E ATAQUES* ——\n`;
         text += `• *!mog @usuario* — Desafia para duelo. O desafiado usa *!mog aceitar*. Em 15s quem mandar mais mensagens vence e ganha 500 aura\n`;
         text += `• *!mognow @usuario* — Ataca alguém. Em 15s: se o alvo mandar mais mensagens, ganha 500 aura; se o atacante ganhar, recebe 5 aura\n`;
-        text += `• *!aura farmar @usuario* — 50% você tira 100 do alvo e ganha 100; 50% você perde 200 aura\n\n`;
-        text += `—— *COMANDOS !aura* ——\n`;
-        text += `• *!aura* — Este guia (tudo sobre aura)\n`;
-        text += `• *!aura info me* — Suas informações (aura, nível, personagem, missões)\n`;
-        text += `• *!aura info @usuario* — Informações de aura de outra pessoa\n`;
-        text += `• *!aura figurinha* — Definir figurinha de aura (com figurinha anexada). Usar essa figurinha dá 50% de +100 aura\n`;
-        text += `• *!aura personagem "nome"* — Definir seu personagem\n`;
-        text += `• *!aura missoes* — Ver suas 3 missões do dia (reset 00:00)\n`;
-        text += `• *!aura ranking* — Top 10 global por aura\n\n`;
+        text += `• *#aura farmar @usuario* — 50% você tira 100 do alvo e ganha 100; 50% você perde 200 aura\n\n`;
+        text += `—— *COMANDOS #aura* ——\n`;
+        text += `• *#aura* — Este guia (tudo sobre aura)\n`;
+        text += `• *#aura info me* — Suas informações (aura, nível, personagem, missões)\n`;
+        text += `• *#aura info @usuario* — Informações de aura de outra pessoa\n`;
+        text += `• *#aura figurinha* — Definir figurinha de aura (com figurinha anexada). Usar essa figurinha dá 50% de +100 aura\n`;
+        text += `• *#aura personagem "nome"* — Definir seu personagem\n`;
+        text += `• *#aura missoes* — Ver suas 3 missões do dia (reset 00:00)\n`;
+        text += `• *#aura ranking* — Top 10 global por aura\n\n`;
         text += `—— *EVENTOS ALEATÓRIOS* ——\n`;
         text += `O bot *dropa eventos* do nada no grupo. Quando aparecer uma mensagem de evento, digite o *comando indicado* no tempo limite para ganhar (ou às vezes perder) aura.\n`;
         text += `Comandos que podem aparecer nos eventos: ${eventCommands}\n`;
         text += `Alguns eventos: primeiro a digitar ganha; outros: todos que digitarem no tempo ganham. Alguns dão aura negativa — cuidado!\n\n`;
         text += `—— *MISSÕES DIÁRIAS* ——\n`;
         text += `Todo dia você recebe 3 missões entre: Mande 50 mensagens, Reaja 20x com 💀/☠️, Vença 1 duelo (!mog), Sobreviva a um ataque (!mognow), Envie mídia, Ajude alguém (!respeito). Concluir dá bônus de aura. Reset às 00:00.\n\n`;
-        text += `_Use *!aura info me* para ver seu perfil completo._`;
+        text += `_Use *#aura info me* para ver seu perfil completo._`;
         await sock.sendMessage(chatId, { text }, { quoted: msg });
         return;
     }

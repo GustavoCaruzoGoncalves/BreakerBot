@@ -4,6 +4,7 @@ const sharp = require('sharp');
 const path = require('path');
 const ffmpegPath = require('ffmpeg-static');
 const ffmpeg = require('fluent-ffmpeg');
+const { PREFIX } = require('../../config/prefix');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -21,7 +22,9 @@ async function imagesCommandsBot(sock, { messages }) {
     const isReplyToVideo = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
     const messageWithText = msg.message.imageMessage?.caption || msg.message.videoMessage?.caption || msg.message.extendedTextMessage?.text || '';
 
-    const isStickerCommand = messageWithText.startsWith("!sticker") || messageWithText.startsWith("!fsticker");
+    const isStickerCommand =
+        messageWithText.startsWith(PREFIX + "sticker") ||
+        messageWithText.startsWith(PREFIX + "fsticker");
     
     if (isStickerCommand) {
         console.log("[DEBUG] Comando de figurinha detectado");
@@ -70,9 +73,9 @@ async function imagesCommandsBot(sock, { messages }) {
 
                     const command = messageWithText;
                     
-                    if (command.startsWith("!sticker")) {
+                    if (command.startsWith(PREFIX + "sticker")) {
                         sharpInstance.resize(1080, 1920, { fit: 'cover' });
-                    } else if (command.startsWith("!fsticker")) {
+                    } else if (command.startsWith(PREFIX + "fsticker")) {
                         sharpInstance.resize(512, 512, { fit: 'cover' });
                     }
 
@@ -104,7 +107,7 @@ async function imagesCommandsBot(sock, { messages }) {
         }
     }
 
-    if (messageWithText.startsWith("!toimg") && isReplyToSticker) {
+    if (messageWithText.startsWith(PREFIX + "toimg") && isReplyToSticker) {
         if (isSticker) {
             console.log("[DEBUG] A mensagem é uma figurinha, evitando envio junto com o !toimg.");
             return;
