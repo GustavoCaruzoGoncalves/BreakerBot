@@ -1,6 +1,8 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 require("dotenv").config();
+const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 const API_KEY = process.env.GENIUS_API_KEY;
 const searchResults = new Map();
@@ -22,14 +24,18 @@ async function lyricsCommandsBot(sock, { messages }) {
   const msg = messages[0];
   if (!msg.message || !msg.key.remoteJid) return;
 
+  if (!features.utility?.lyrics?.enabled) return;
+
   const sender = msg.key.remoteJid;
   const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
-  if (textMessage.toLowerCase().startsWith('!lyrics escolha')) {
+  const lyricsCommand = `${PREFIX}lyrics`;
+
+  if (textMessage.toLowerCase().startsWith(`${lyricsCommand.toLowerCase()} escolha`)) {
     const numeroEscolha = parseInt(textMessage.split(' ')[2], 10);
     if (isNaN(numeroEscolha)) {
       await sock.sendMessage(sender, {
-        text: '❗ Número inválido. Use: *!lyrics escolha 1*',
+        text: `❗ Número inválido. Use: *${lyricsCommand} escolha 1*`,
       }, { quoted: msg });
       return;
     }
@@ -96,9 +102,9 @@ async function lyricsCommandsBot(sock, { messages }) {
     return;
   }
 
-  if (!textMessage.toLowerCase().startsWith('!lyrics')) return;
+  if (!textMessage.toLowerCase().startsWith(lyricsCommand.toLowerCase())) return;
 
-  const query = textMessage.slice('!lyrics'.length).trim();
+  const query = textMessage.slice(lyricsCommand.length).trim();
   const regex = /"([^"]+)"/g;
   const matches = [];
   let match;
@@ -106,7 +112,7 @@ async function lyricsCommandsBot(sock, { messages }) {
   while ((match = regex.exec(query)) !== null) matches.push(match[1]);
   if (matches.length !== 2) {
     await sock.sendMessage(sender, {
-      text: '❗ Use o formato correto: *!lyrics "nome do cantor" "nome da música"*',
+      text: `❗ Use o formato correto: *${lyricsCommand} "nome do cantor" "nome da música"*`,
     }, { quoted: msg });
     return;
   }
@@ -135,7 +141,7 @@ async function lyricsCommandsBot(sock, { messages }) {
       .join('\n');
 
     await sock.sendMessage(sender, {
-      text: `🎵 Resultados encontrados:\n\n${lista}\n\nResponda com *!lyrics escolha N* para ver a letra.`,
+      text: `🎵 Resultados encontrados:\n\n${lista}\n\nResponda com *${lyricsCommand} escolha N* para ver a letra.`,
     }, { quoted: msg });
   } catch (error) {
     console.error(error);

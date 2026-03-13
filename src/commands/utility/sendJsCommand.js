@@ -1,10 +1,14 @@
 const path = require('path');
 const fs = require('fs');
 const { admins } = require('../../config/adm');
+const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 async function sendJsCommandBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.utility?.sendJs?.enabled) return;
 
     const chatId = msg.key.remoteJid;
     
@@ -18,12 +22,15 @@ async function sendJsCommandBot(sock, { messages }) {
 
     if (msg.key.fromMe) return;
 
-    if (textMessage.startsWith("!js")) {
-        console.log(`[DEBUG] Comando !js detectado de ${sender} no chat ${chatId}`);
+    const jsCommand = `${PREFIX}js`;
+    const sendJsonCommand = `${PREFIX}sendJson`;
+
+    if (textMessage.startsWith(jsCommand)) {
+        console.log(`[DEBUG] Comando ${jsCommand} detectado de ${sender} no chat ${chatId}`);
 
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
-                text: "❌ Você não tem permissão para usar este comando. Apenas administradores podem executar !js.",
+                text: `❌ Você não tem permissão para usar este comando. Apenas administradores podem executar ${jsCommand}.`,
             }, { quoted: msg });
             return;
         }
@@ -44,7 +51,7 @@ async function sendJsCommandBot(sock, { messages }) {
                 document: Buffer.from(fileContent, 'utf8'),
                 fileName: 'jokesCommands.js',
                 mimetype: 'application/javascript',
-                caption: '📁 Arquivo jokesCommands.js enviado por comando !js'
+                caption: `📁 Arquivo jokesCommands.js enviado pelo comando ${jsCommand}`
             }, { quoted: msg });
 
             console.log(`[SUCCESS] Arquivo jokesCommands.js enviado para ${chatId}`);
@@ -57,12 +64,12 @@ async function sendJsCommandBot(sock, { messages }) {
         }
     }
 
-    if (textMessage.startsWith("!sendJson")) {
-        console.log(`[DEBUG] Comando !sendJson detectado de ${sender} no chat ${chatId}`);
+    if (textMessage.startsWith(sendJsonCommand)) {
+        console.log(`[DEBUG] Comando ${sendJsonCommand} detectado de ${sender} no chat ${chatId}`);
 
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
-                text: "❌ Você não tem permissão para usar este comando. Apenas administradores podem executar !sendJson.",
+                text: `❌ Você não tem permissão para usar este comando. Apenas administradores podem executar ${sendJsonCommand}.`,
             }, { quoted: msg });
             return;
         }
@@ -83,7 +90,7 @@ async function sendJsCommandBot(sock, { messages }) {
                 document: Buffer.from(fileContent, 'utf8'),
                 fileName: 'users.json',
                 mimetype: 'application/json',
-                caption: '📊 Arquivo users.json (dados dos usuários) enviado por comando !sendJson'
+                caption: `📊 Arquivo users.json (dados dos usuários) enviado pelo comando ${sendJsonCommand}`
             }, { quoted: msg });
 
             console.log(`[SUCCESS] Arquivo users.json enviado para ${chatId}`);

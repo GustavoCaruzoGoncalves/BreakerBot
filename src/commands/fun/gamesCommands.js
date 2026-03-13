@@ -1,6 +1,8 @@
 const { default: axios } = require("axios");
 require("dotenv").config();
 const mentionsController = require("../../controllers/mentionsController");
+const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 const playerGames = new Map();
 
@@ -138,11 +140,15 @@ async function gamesCommandsBot(sock, { messages }) {
 
     if (!msg.message || !msg.key.remoteJid) return;
 
+    if (!features.fun?.games?.enabled) return;
+
     const chatId = msg.key.remoteJid;
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
     const playerId = getPlayerId(msg);
 
-    if (text === "!trivia start") {
+    const triviaCommand = `${PREFIX}trivia`;
+
+    if (text === `${triviaCommand} start`) {
         const playerGame = resetPlayerGame(playerId);
         const { prefix, mentions } = getPlayerMentionPrefix(playerId);
         
@@ -168,19 +174,19 @@ async function gamesCommandsBot(sock, { messages }) {
         askNextQuestion(sock, chatId, playerId);
     }
 
-    else if (text && text.startsWith("!trivia resposta")) {
+    else if (text && text.startsWith(`${triviaCommand} resposta`)) {
         const userAnswer = text.split(" ")[2];
         const { prefix, mentions } = getPlayerMentionPrefix(playerId);
         
         if (!userAnswer) {
-            await sendMessageWithRetry(sock, chatId, `${prefix}Por favor, forneça uma resposta (A, B, C ou D). Exemplo: !trivia resposta A`, mentions);
+            await sendMessageWithRetry(sock, chatId, `${prefix}Por favor, forneça uma resposta (A, B, C ou D). Exemplo: ${triviaCommand} resposta A`, mentions);
             return;
         }
 
         const playerGame = getPlayerGame(playerId);
-
+        
         if (playerGame.triviaQuestions.length === 0 || playerGame.questionIndex >= playerGame.triviaQuestions.length) {
-            await sendMessageWithRetry(sock, chatId, `${prefix}Nenhum jogo em andamento. Use !trivia start para começar.`, mentions);
+            await sendMessageWithRetry(sock, chatId, `${prefix}Nenhum jogo em andamento. Use ${triviaCommand} start para começar.`, mentions);
             return;
         }
 
@@ -211,13 +217,13 @@ async function askNextQuestion(sock, chatId, playerId) {
         setTimeout(async () => {
             const currentQ = playerGame.triviaQuestions[playerGame.questionIndex];
             const questionText = `${prefix}📝 Pergunta ${playerGame.questionIndex + 1}/${playerGame.triviaQuestions.length}:
-
-${currentQ.question}
-
-${currentQ.options.join('\n')}
-
-Responda com: !trivia resposta [letra]
-Exemplo: !trivia resposta A`;
+        
+        ${currentQ.question}
+        
+        ${currentQ.options.join('\n')}
+        
+        Responda com: ${triviaCommand} resposta [letra]
+        Exemplo: ${triviaCommand} resposta A`;
             
             await sendMessageWithRetry(sock, chatId, questionText, mentions);
         }, 1000);

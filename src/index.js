@@ -1,3 +1,5 @@
+require("dotenv").config({ path: __dirname + "/../.env" });
+
 const {
   makeWASocket,
   useMultiFileAuthState,
@@ -7,6 +9,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { startAuthMessageProcessor } = require("./services/authMessageSender");
+const features = require("./config/features");
 
 const imagesCommandsBot = require("./commands/media/imagesCommands");
 const audioCommandsBot = require("./commands/media/audioCommands");
@@ -23,6 +26,7 @@ const lyricsCommandBot = require("./commands/utility/lyricsCommand");
 const sendJsCommandBot = require("./commands/utility/sendJsCommand");
 const levelCommandBot = require("./commands/level/levelCommand");
 const auraCommandBot = require("./commands/aura/auraCommand");
+const memeCommandsBot = require("./commands/media/memeCommands");
 const handleAuraReaction =
   require("./commands/aura/auraCommand").handleAuraReaction;
 
@@ -51,6 +55,8 @@ const contactsCache = {};
 
 async function connectBot() {
   try {
+    console.log("[FEATURES] aura:", features.aura?.enabled ? "ON" : "OFF");
+
     const { state, saveCreds } = await useMultiFileAuthState(
       path.join(__dirname, "..", "auth_info"),
     );
@@ -141,6 +147,7 @@ async function connectBot() {
         console.log("========================================\n");
 
         await imagesCommandsBot(sock, messages);
+        await memeCommandsBot(sock, messages);
         await audioCommandsBot(sock, messages);
         await jokesCommandsBot(sock, messages, contactsCache);
         await featureCommandsBot(sock, messages);

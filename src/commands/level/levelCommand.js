@@ -4,6 +4,8 @@ const https = require('https');
 const http = require('http');
 const { admins } = require('../../config/adm');
 const mentionsController = require('../../controllers/mentionsController');
+const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 async function downloadImageAsBase64(url) {
     return new Promise((resolve, reject) => {
@@ -649,6 +651,8 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
 
+    if (!features.level?.enabled) return;
+
     const chatId = msg.key.remoteJid;
     
     const isGroup = msg.key.remoteJid.endsWith('@g.us');
@@ -661,8 +665,11 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
 
     if (msg.key.fromMe) return;
 
-    const excludedCommands = ['!menu', '!help', '!ajuda'];
-    const isExcludedCommand = excludedCommands.some(cmd => textMessage.toLowerCase().startsWith(cmd.toLowerCase()));
+    const menuCommandLower = `${PREFIX}menu`.toLowerCase();
+    const helpCommandLower = `${PREFIX}help`.toLowerCase();
+    const ajudaCommandLower = `${PREFIX}ajuda`.toLowerCase();
+    const excludedCommands = [menuCommandLower, helpCommandLower, ajudaCommandLower];
+    const isExcludedCommand = excludedCommands.some(cmd => textMessage.toLowerCase().startsWith(cmd));
 
     if (textMessage && textMessage.trim().length > 0) {
         console.log(`[DEBUG] Processando mensagem de ${sender}: "${textMessage}"`);
@@ -759,7 +766,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
                 const userInfo = levelSystem.getUserInfo(sender);
                 const mentionInfo2 = mentionsController.processSingleMention(sender, contactsCache);
                 await sock.sendMessage(chatId, {
-                    text: `🏆 ${mentionInfo2.mentionText} alcançou o nível ${xpResult.newLevel}! Você tem ${userInfo.prestigeAvailable} prestígios disponíveis! Use !prestigio para resgatar! 🏆`,
+                    text: `🏆 ${mentionInfo2.mentionText} alcançou o nível ${xpResult.newLevel}! Você tem ${userInfo.prestigeAvailable} prestígios disponíveis! Use ${PREFIX}prestigio para resgatar! 🏆`,
                     mentions: mentionInfo2.mentions
                 });
             }
@@ -785,7 +792,9 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage === "!me" || textMessage.startsWith("!me ")) {
+    const meCommand = `${PREFIX}me`;
+
+    if (textMessage === meCommand || textMessage.startsWith(`${meCommand} `)) {
         const userInfo = levelSystem.getUserInfo(sender);
         const rank = userInfo.rank;
         
@@ -826,8 +835,10 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!info")) {
-        console.log('========== LOG DE MENÇÃO (!info) ==========');
+    const infoCommand = `${PREFIX}info`;
+
+    if (textMessage.startsWith(infoCommand)) {
+        console.log(`========== LOG DE MENÇÃO (${infoCommand}) ==========`); 
         console.log('[DEBUG] Mensagem completa (msg):', JSON.stringify(msg, null, 2));
         console.log('[DEBUG] msg.key:', JSON.stringify(msg.key, null, 2));
         console.log('[DEBUG] msg.message:', JSON.stringify(msg.message, null, 2));
@@ -841,7 +852,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         const parts = textMessage.split(' ');
         if (parts.length < 2) {
             await sock.sendMessage(chatId, {
-                text: "📝 *Uso:* !info @usuario\n\n*Exemplo:* !info @usuario"
+                text: `📝 *Uso:* ${infoCommand} @usuario\n\n*Exemplo:* ${infoCommand} @usuario`
             }, { quoted: msg });
             return;
         }
@@ -861,7 +872,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
             }
         } else {
             await sock.sendMessage(chatId, {
-                text: "❌ Você deve mencionar um usuário! Use: !info @usuario"
+                text: `❌ Você deve mencionar um usuário! Use: ${infoCommand} @usuario`
             }, { quoted: msg });
             return;
         }
@@ -896,21 +907,25 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!elos")) {
+    const elosCommand = `${PREFIX}elos`;
+
+    if (textMessage.startsWith(elosCommand)) {
         let elosMessage = `🌟 *Sistema de Elos* 🌟\n\n`;
         
         RANKS.forEach((rank, index) => {
             elosMessage += `${rank.name} - Níveis ${rank.minLevel} a ${rank.maxLevel}\n`;
         });
         
-        elosMessage += `\n💡 Use !me para ver seu status atual!`;
+        elosMessage += `\n💡 Use ${meCommand} para ver seu status atual!`;
         
         await sock.sendMessage(chatId, {
             text: elosMessage
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!prestigioAll")) {
+    const prestigioAllCommand = `${PREFIX}prestigioAll`;
+
+    if (textMessage.startsWith(prestigioAllCommand)) {
         const prestigeAllResult = levelSystem.prestigioAll(sender);
         
         const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
@@ -920,7 +935,9 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage === "!prestigio" || textMessage.startsWith("!prestigio ")) {
+    const prestigioCommand = `${PREFIX}prestigio`;
+
+    if (textMessage === prestigioCommand || textMessage.startsWith(`${prestigioCommand} `)) {
         const prestigeResult = levelSystem.prestige(sender);
         
         const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
@@ -930,7 +947,10 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!ranking") && !textMessage.startsWith("!rankingGay")) {
+    const rankingCommand = `${PREFIX}ranking`;
+    const rankingGayCommand = `${PREFIX}rankingGay`;
+
+    if (textMessage.startsWith(rankingCommand) && !textMessage.startsWith(rankingGayCommand)) {
         const ranking = levelSystem.getRanking(10);
         
         let rankingMessage = `🏆 *Ranking Top 10* 🏆\n\n`;
@@ -963,7 +983,9 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!niveis")) {
+    const niveisCommand = `${PREFIX}niveis`;
+
+    if (textMessage.startsWith(niveisCommand)) {
         let niveisMessage = `🎯 *Sistema de Níveis* 🎯\n\n`;
         niveisMessage += `📊 *Como funciona:*\n`;
         niveisMessage += `• Ganhe 10 XP a cada mensagem enviada\n`;
@@ -988,13 +1010,13 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         niveisMessage += `• Notificação automática ao mudar de elo\n\n`;
         
         niveisMessage += `💬 *Comandos disponíveis:*\n`;
-        niveisMessage += `• !me - Seu status atual\n`;
-        niveisMessage += `• !info @usuario - Informações de outro usuário\n`;
-        niveisMessage += `• !elos - Lista todos os elos\n`;
-        niveisMessage += `• !prestigio - Faz prestígio\n`;
-        niveisMessage += `• !prestigioAll - Usa todos os prestígios disponíveis\n`;
-        niveisMessage += `• !ranking - Top 10 usuários\n`;
-        niveisMessage += `• !niveis - Esta explicação\n\n`;
+        niveisMessage += `• ${meCommand} - Seu status atual\n`;
+        niveisMessage += `• ${infoCommand} @usuario - Informações de outro usuário\n`;
+        niveisMessage += `• ${elosCommand} - Lista todos os elos\n`;
+        niveisMessage += `• ${prestigioCommand} - Faz prestígio\n`;
+        niveisMessage += `• ${prestigioAllCommand} - Usa todos os prestígios disponíveis\n`;
+        niveisMessage += `• ${rankingCommand} - Top 10 usuários\n`;
+        niveisMessage += `• ${niveisCommand} - Esta explicação\n\n`;
         
         niveisMessage += `🔔 *Notificações automáticas:*\n`;
         niveisMessage += `• Level up - Quando sobe de nível\n`;
@@ -1006,8 +1028,10 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.toLowerCase().startsWith("!setlevel")) {
-        console.log(`[DEBUG] Comando !setlevel detectado: "${textMessage}"`);
+    const setLevelCommand = `${PREFIX}setlevel`;
+
+    if (textMessage.toLowerCase().startsWith(setLevelCommand.toLowerCase())) {
+        console.log(`[DEBUG] Comando ${setLevelCommand} detectado: "${textMessage}"`);
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Acesso negado! Apenas administradores podem usar este comando."
@@ -1018,7 +1042,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         const parts = textMessage.split(' ');
         if (parts.length < 3) {
             await sock.sendMessage(chatId, {
-                text: "📝 *Uso:* !setlevel @usuario nivel\n📝 *Uso:* !setlevel me nivel\n\n*Exemplos:*\n• !setlevel @usuario 50\n• !setlevel me 25"
+                text: `📝 *Uso:* ${setLevelCommand} @usuario nivel\n📝 *Uso:* ${setLevelCommand} me nivel\n\n*Exemplos:*\n• ${setLevelCommand} @usuario 50\n• ${setLevelCommand} me 25`
             }, { quoted: msg });
             return;
         }
@@ -1026,7 +1050,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         const targetUser = parts[1];
         const targetLevel = parseInt(parts[2]);
 
-        console.log(`[DEBUG] !setlevel - targetUser: "${targetUser}", targetLevel: ${targetLevel}`);
+        console.log(`[DEBUG] ${setLevelCommand} - targetUser: "${targetUser}", targetLevel: ${targetLevel}`);
 
         if (isNaN(targetLevel)) {
             await sock.sendMessage(chatId, {
@@ -1037,7 +1061,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
 
         let targetUserId;
         if (targetUser.toLowerCase() === 'me') {
-            console.log(`[DEBUG] !setlevel - Usando "me", targetUserId será: ${sender}`);
+            console.log(`[DEBUG] ${setLevelCommand} - Usando "me", targetUserId será: ${sender}`);
             targetUserId = sender;
         } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -1074,8 +1098,10 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase().startsWith("!resetsetlevel")) {
-        console.log(`[DEBUG] Comando !resetSetLevel detectado: "${textMessage}"`);
+    const resetSetLevelCommand = `${PREFIX}resetSetLevel`;
+
+    if (textMessage.toLowerCase().startsWith(resetSetLevelCommand.toLowerCase())) {
+        console.log(`[DEBUG] Comando ${resetSetLevelCommand} detectado: "${textMessage}"`);
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
                 text: "❌ Acesso negado! Apenas administradores podem usar este comando."
@@ -1086,7 +1112,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         const parts = textMessage.split(' ');
         if (parts.length < 2) {
             await sock.sendMessage(chatId, {
-                text: "📝 *Uso:* !resetSetLevel @usuario\n📝 *Uso:* !resetSetLevel me\n\n*Exemplos:*\n• !resetSetLevel @usuario\n• !resetSetLevel me"
+                text: `📝 *Uso:* ${resetSetLevelCommand} @usuario\n📝 *Uso:* ${resetSetLevelCommand} me\n\n*Exemplos:*\n• ${resetSetLevelCommand} @usuario\n• ${resetSetLevelCommand} me`
             }, { quoted: msg });
             return;
         }
@@ -1094,10 +1120,10 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         const targetUser = parts[1];
         let targetUserId;
 
-        console.log(`[DEBUG] !resetSetLevel - targetUser: "${targetUser}"`);
+        console.log(`[DEBUG] ${resetSetLevelCommand} - targetUser: "${targetUser}"`);
 
         if (targetUser.toLowerCase() === 'me') {
-            console.log(`[DEBUG] !resetSetLevel - Usando "me", targetUserId será: ${sender}`);
+            console.log(`[DEBUG] ${resetSetLevelCommand} - Usando "me", targetUserId será: ${sender}`);
             targetUserId = sender;
         } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -1134,7 +1160,9 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase() === "!pfp" || textMessage.toLowerCase().startsWith("!pfp ")) {
+    const pfpCommand = `${PREFIX}pfp`;
+
+    if (textMessage.toLowerCase() === pfpCommand.toLowerCase() || textMessage.toLowerCase().startsWith(`${pfpCommand.toLowerCase()} `)) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1156,7 +1184,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: "📝 *Uso:* !pfp @usuario ou !pfp me\n\n*Exemplos:*\n• !pfp @usuario - Foto de outro usuário\n• !pfp me - Sua própria foto\n• !pfp - Sua própria foto"
+                    text: `📝 *Uso:* ${pfpCommand} @usuario ou ${pfpCommand} me\n\n*Exemplos:*\n• ${pfpCommand} @usuario - Foto de outro usuário\n• ${pfpCommand} me - Sua própria foto\n• ${pfpCommand} - Sua própria foto`
                 }, { quoted: msg });
                 return;
             }
