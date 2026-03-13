@@ -55,6 +55,7 @@ const AMIGO_SECRETO_FILE = path.join(__dirname, '..', '..', 'data', 'amigoSecret
 const PRAISED_FILE = path.join(__dirname, '..', '..', 'data', 'praised.json');
 
 const auraCommand = require('../commands/aura/auraCommand');
+const auraSystem = auraCommand.auraSystem;
 const getAuraKey = auraCommand.getAuraKey;
 const getWhoPraised = auraCommand.getWhoPraised;
 const MISSION_IDS = auraCommand.MISSION_IDS;
@@ -1358,6 +1359,150 @@ app.get('/api/aura/praised', (req, res) => {
         });
     } catch (error) {
         console.error('Erro ao buscar praised:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+// Slot machine (caça-níqueis) com tema de aura
+const SLOT_SYMBOLS = [
+    { id: 'fire', emoji: '🔥', weight: 5, pay: [0, 1, 5, 20] },
+    { id: 'crystal', emoji: '✨', weight: 4, pay: [0, 2, 3, 15] },
+    { id: 'star', emoji: '🌟', weight: 3, pay: [0, 3, 4, 10] },
+    { id: 'diamond', emoji: '💎', weight: 2, pay: [0, 5, 20, 50] },
+    { id: 'god', emoji: '👑', weight: 1, pay: [0, 10, 50, 100] },
+    { id: 'wild', emoji: '💀', weight: 2, pay: [0, 0, 0, 0] }
+];
+
+function pickRandomSymbol() {
+    const totalWeight = SLOT_SYMBOLS.reduce((s, sym) => s + sym.weight, 0);
+    let r = Math.random() * totalWeight;
+    for (const sym of SLOT_SYMBOLS) {
+        r -= sym.weight;
+        if (r <= 0) return sym;
+    }
+    return SLOT_SYMBOLS[0];
+}
+
+function calcSlotWin(reels, bet) {
+    const [c0, c1, c2] = reels;
+    let totalWin = 0;
+    const lines = [
+        [c0[0], c1[0], c2[0]],
+        [c0[1], c1[1], c2[1]],
+        [c0[2], c1[2], c2[2]]
+    ];
+    for (const line of lines) {
+        const [a, b, c] = line;
+        const isWild = (s) => s.id === 'wild';
+        const syms = [a, b, c].filter(x => !isWild(x));
+        const wilds = [a, b, c].filter(isWild).length;
+        if (syms.length === 0) {
+            totalWin += bet * 50;
+            continue;
+        }
+        const sym = syms[0];
+        const count = syms.filter(s => s.id === sym.id).length + wilds;
+        if (count === 3) {
+            totalWin += bet * sym.pay[3];
+        }
+    }
+    return totalWin;
+}
+
+app.post('/api/aura/slot', (req, res) => {
+    try {
+        const { token, bet } = req.body;
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Token é obrigatório' });
+        }
+        const sessions = readJsonFile(SESSIONS_FILE) || {};
+        const session = sessions[token];
+        if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+            return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
+        }
+        const userId = session.userId;
+        const auraKey = getAuraKey(userId);
+        if (!auraKey) {
+            return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
+        }
+        const betAmount = Math.floor(Number(bet) || 0);
+        if (betAmount < 1) {
+            return res.status(400).json({
+                success: false,
+                message: 'Aposta mínima: 1 aura'
+            });
+        }
+        const userAura = auraSystem.getUserAura(auraKey);
+        const balance = userAura?.auraPoints ?? 0;
+        if (balance < betAmount) {
+            return res.status(400).json({
+                success: false,
+                message: 'Saldo insuficiente',
+                balance
+            });
+        }
+        auraSystem.addAuraPoints(auraKey, -betAmount);
+        const reels = [
+            [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()],
+            [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()],
+            [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()]
+        ];
+        const winAmount = calcSlotWin(reels, betAmount);
+        const netChange = winAmount - betAmount;
+        if (netChange > 0) {
+            auraSystem.addAuraPoints(auraKey, netChange);
+        }
+        const newBalance = balance - betAmount + winAmount;
+        res.json({
+            success: true,
+            reels: reels.map(col => col.map(s => ({ id: s.id, emoji: s.emoji }))),
+            bet: betAmount,
+            win: winAmount,
+            netChange,
+            balance: newBalance
+        });
+    } catch (error) {
+        console.error('Erro no slot:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.post('/api/aura/game-reward', (req, res) => {
+    try {
+        const { token, game, score } = req.body;
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Token é obrigatório' });
+        }
+        if (!game) {
+            return res.status(400).json({ success: false, message: 'Dados inválidos' });
+        }
+        const scoreNum = Number(score);
+        if (Number.isNaN(scoreNum)) {
+            return res.status(400).json({ success: false, message: 'Dados inválidos' });
+        }
+        const sessions = readJsonFile(SESSIONS_FILE) || {};
+        const session = sessions[token];
+        if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+            return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
+        }
+        const userId = session.userId;
+        const auraKey = getAuraKey(userId);
+        if (!auraKey) {
+            return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
+        }
+        const reward = Math.floor(scoreNum);
+        if (reward !== 0) {
+            auraSystem.addAuraPoints(auraKey, reward);
+        }
+        const userAura = auraSystem.getUserAura(auraKey);
+        const balance = userAura?.auraPoints ?? 0;
+        res.json({
+            success: true,
+            reward,
+            balance
+        });
+    } catch (error) {
+        console.error('Erro no game-reward:', error);
         res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
 });
