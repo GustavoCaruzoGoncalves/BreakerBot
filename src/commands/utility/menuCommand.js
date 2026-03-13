@@ -1,8 +1,11 @@
 const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 async function menuCommandBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.utility?.menu?.enabled) return;
 
     const sender = msg.key.remoteJid;
     const messageType = Object.keys(msg.message)[0];

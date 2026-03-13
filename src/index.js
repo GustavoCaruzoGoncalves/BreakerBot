@@ -1,3 +1,5 @@
+require("dotenv").config({ path: __dirname + "/../.env" });
+
 const {
   makeWASocket,
   useMultiFileAuthState,
@@ -7,6 +9,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { startAuthMessageProcessor } = require("./services/authMessageSender");
+const features = require("./config/features");
 
 const imagesCommandsBot = require("./commands/media/imagesCommands");
 const audioCommandsBot = require("./commands/media/audioCommands");
@@ -52,6 +55,8 @@ const contactsCache = {};
 
 async function connectBot() {
   try {
+    console.log("[FEATURES] aura:", features.aura?.enabled ? "ON" : "OFF");
+
     const { state, saveCreds } = await useMultiFileAuthState(
       path.join(__dirname, "..", "auth_info"),
     );

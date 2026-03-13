@@ -6,6 +6,7 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const https = require('https');
 const http = require('http');
 const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -137,6 +138,8 @@ async function downloadWithYtdlp(url, outputPath, format) {
 async function audioCommandsBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.media?.audio?.enabled) return;
 
     const sender = msg.key.remoteJid;
     const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';

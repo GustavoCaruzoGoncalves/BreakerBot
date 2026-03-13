@@ -2,6 +2,7 @@ const { default: axios } = require("axios");
 require("dotenv").config();
 const mentionsController = require("../../controllers/mentionsController");
 const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 const playerGames = new Map();
 
@@ -139,6 +140,8 @@ async function gamesCommandsBot(sock, { messages }) {
 
     if (!msg.message || !msg.key.remoteJid) return;
 
+    if (!features.fun?.games?.enabled) return;
+
     const chatId = msg.key.remoteJid;
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
     const playerId = getPlayerId(msg);
@@ -181,9 +184,9 @@ async function gamesCommandsBot(sock, { messages }) {
         }
 
         const playerGame = getPlayerGame(playerId);
-
+        
         if (playerGame.triviaQuestions.length === 0 || playerGame.questionIndex >= playerGame.triviaQuestions.length) {
-            await sendMessageWithRetry(sock, chatId, `${prefix}Nenhum jogo em andamento. Use !trivia start para começar.`, mentions);
+            await sendMessageWithRetry(sock, chatId, `${prefix}Nenhum jogo em andamento. Use ${triviaCommand} start para começar.`, mentions);
             return;
         }
 
@@ -214,13 +217,13 @@ async function askNextQuestion(sock, chatId, playerId) {
         setTimeout(async () => {
             const currentQ = playerGame.triviaQuestions[playerGame.questionIndex];
             const questionText = `${prefix}📝 Pergunta ${playerGame.questionIndex + 1}/${playerGame.triviaQuestions.length}:
-
-${currentQ.question}
-
-${currentQ.options.join('\n')}
-
-Responda com: !trivia resposta [letra]
-Exemplo: !trivia resposta A`;
+        
+        ${currentQ.question}
+        
+        ${currentQ.options.join('\n')}
+        
+        Responda com: ${triviaCommand} resposta [letra]
+        Exemplo: ${triviaCommand} resposta A`;
             
             await sendMessageWithRetry(sock, chatId, questionText, mentions);
         }, 1000);

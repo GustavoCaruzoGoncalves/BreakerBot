@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { admins } = require('../../config/adm');
 const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 const FEATURES_FILE = path.join(__dirname, '..', '..', '..', 'data', 'features.json');
 
@@ -38,6 +39,8 @@ function writeFeatures(features) {
 async function featureCommandsBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.utility?.feature?.enabled) return;
 
     const chatId = msg.key.remoteJid;
     const isGroup = msg.key.remoteJid.endsWith('@g.us');

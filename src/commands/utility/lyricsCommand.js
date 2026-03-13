@@ -2,6 +2,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 require("dotenv").config();
 const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 const API_KEY = process.env.GENIUS_API_KEY;
 const searchResults = new Map();
@@ -22,6 +23,8 @@ function formatarLetraTextoCru(texto) {
 async function lyricsCommandsBot(sock, { messages }) {
   const msg = messages[0];
   if (!msg.message || !msg.key.remoteJid) return;
+
+  if (!features.utility?.lyrics?.enabled) return;
 
   const sender = msg.key.remoteJid;
   const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';

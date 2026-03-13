@@ -3,12 +3,15 @@ const { downloadMediaMessage } = require("@whiskeysockets/baileys");
 require("dotenv").config();
 const { admins } = require("../../config/adm");
 const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 const chatMemory = {};
 
 async function zhipuCommandBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.ai?.zhipu?.enabled) return;
 
     const chatId = msg.key.remoteJid;
     

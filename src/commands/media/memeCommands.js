@@ -2,10 +2,13 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const sharp = require('sharp');
 const { default: axios } = require('axios');
 const memeTemplateService = require('../../services/memeTemplateService');
+const features = require('../../config/features');
 
 async function memeCommandsBot(sock, { messages }) {
   const msg = messages[0];
   if (!msg.message || !msg.key.remoteJid) return;
+
+  if (!features.media?.memes?.enabled) return;
 
   const sender = msg.key.remoteJid;
   const messageType = Object.keys(msg.message)[0];
@@ -43,7 +46,7 @@ async function memeCommandsBot(sock, { messages }) {
       sender,
       {
         text:
-          'Envie/responda uma imagem com `!kratos <texto>` ou use `!kratos @usuario <texto>` para usar a foto de perfil.',
+          `Envie/responda uma imagem com \`${kratosCommand} <texto>\` ou use \`${kratosCommand} @usuario <texto>\` para usar a foto de perfil.`,
       },
       { quoted: msg },
     );
@@ -92,7 +95,7 @@ async function memeCommandsBot(sock, { messages }) {
         mediaBuffer = Buffer.from(response.data);
       } catch (e) {
         console.error(
-          '[ERRO] Falha ao baixar foto de perfil para !kratos:',
+          '[ERRO] Falha ao baixar foto de perfil para kratos:',
           e,
         );
         await sock.sendMessage(
@@ -230,7 +233,7 @@ async function memeCommandsBot(sock, { messages }) {
       { quoted: msg },
     );
   } catch (err) {
-    console.error('[ERRO] Falha ao gerar meme !kratos:', err);
+    console.error('[ERRO] Falha ao gerar meme kratos:', err);
     await sock.sendMessage(
       sender,
       { text: 'Erro ao gerar o meme do Kratos. Tente novamente mais tarde.' },

@@ -2,10 +2,13 @@ const path = require('path');
 const fs = require('fs');
 const { admins } = require('../../config/adm');
 const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 async function sendJsCommandBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.utility?.sendJs?.enabled) return;
 
     const chatId = msg.key.remoteJid;
     
@@ -48,7 +51,7 @@ async function sendJsCommandBot(sock, { messages }) {
                 document: Buffer.from(fileContent, 'utf8'),
                 fileName: 'jokesCommands.js',
                 mimetype: 'application/javascript',
-                caption: '📁 Arquivo jokesCommands.js enviado por comando !js'
+                caption: `📁 Arquivo jokesCommands.js enviado pelo comando ${jsCommand}`
             }, { quoted: msg });
 
             console.log(`[SUCCESS] Arquivo jokesCommands.js enviado para ${chatId}`);
@@ -87,7 +90,7 @@ async function sendJsCommandBot(sock, { messages }) {
                 document: Buffer.from(fileContent, 'utf8'),
                 fileName: 'users.json',
                 mimetype: 'application/json',
-                caption: '📊 Arquivo users.json (dados dos usuários) enviado por comando !sendJson'
+                caption: `📊 Arquivo users.json (dados dos usuários) enviado pelo comando ${sendJsonCommand}`
             }, { quoted: msg });
 
             console.log(`[SUCCESS] Arquivo users.json enviado para ${chatId}`);

@@ -1,9 +1,12 @@
 const { admins } = require("../../config/adm");
 const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 async function banCommandBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid.endsWith("@g.us")) return;
+
+    if (!features.moderation?.ban?.enabled) return;
 
     const groupId = msg.key.remoteJid;
     

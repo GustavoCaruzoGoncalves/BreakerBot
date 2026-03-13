@@ -5,6 +5,7 @@ const http = require('http');
 const { admins } = require('../../config/adm');
 const mentionsController = require('../../controllers/mentionsController');
 const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 async function downloadImageAsBase64(url) {
     return new Promise((resolve, reject) => {
@@ -650,6 +651,8 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
 
+    if (!features.level?.enabled) return;
+
     const chatId = msg.key.remoteJid;
     
     const isGroup = msg.key.remoteJid.endsWith('@g.us');
@@ -835,7 +838,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
     const infoCommand = `${PREFIX}info`;
 
     if (textMessage.startsWith(infoCommand)) {
-        console.log('========== LOG DE MENÇÃO (!info) ==========');
+        console.log(`========== LOG DE MENÇÃO (${infoCommand}) ==========`); 
         console.log('[DEBUG] Mensagem completa (msg):', JSON.stringify(msg, null, 2));
         console.log('[DEBUG] msg.key:', JSON.stringify(msg.key, null, 2));
         console.log('[DEBUG] msg.message:', JSON.stringify(msg.message, null, 2));

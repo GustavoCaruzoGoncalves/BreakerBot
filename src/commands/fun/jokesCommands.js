@@ -6,6 +6,7 @@ const sharp = require('sharp');
 const mentionsController = require('../../controllers/mentionsController');
 const { admins } = require('../../config/adm');
 const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
 
@@ -259,6 +260,8 @@ async function applyBolsonaro3Filter(inputBuffer) {
 async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.fun?.jokes?.enabled) return;
 
     const chatId = msg.key.remoteJid;
     const isGroup = msg.key.remoteJid.endsWith('@g.us');
@@ -1609,7 +1612,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
 
         try {
-            console.log('========== DEBUG !rankingGay ==========');
+            console.log(`========== DEBUG rankingGay (${rankingGayCommand}) ==========`);
             const groupMetadata = await sock.groupMetadata(chatId);
             const participants = groupMetadata.participants || [];
             
@@ -1711,7 +1714,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             }
 
         } catch (error) {
-            console.error('Erro ao executar !rankingGay:', error);
+            console.error('Erro ao executar rankingGay:', error);
             await sock.sendMessage(chatId, {
                 text: "❌ Erro ao gerar o ranking. Tente novamente!",
             }, { quoted: msg });

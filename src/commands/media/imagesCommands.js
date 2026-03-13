@@ -5,12 +5,15 @@ const path = require('path');
 const ffmpegPath = require('ffmpeg-static');
 const ffmpeg = require('fluent-ffmpeg');
 const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 async function imagesCommandsBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.media?.images?.enabled) return;
 
     const sender = msg.key.remoteJid;
     const messageType = Object.keys(msg.message)[0];
@@ -113,7 +116,7 @@ async function imagesCommandsBot(sock, { messages }) {
 
     if (messageWithText.startsWith(toImgCommand) && isReplyToSticker) {
         if (isSticker) {
-            console.log("[DEBUG] A mensagem é uma figurinha, evitando envio junto com o !toimg.");
+            console.log("[DEBUG] A mensagem é uma figurinha, evitando envio junto com o comando de conversão para imagem.");
             return;
         }
 

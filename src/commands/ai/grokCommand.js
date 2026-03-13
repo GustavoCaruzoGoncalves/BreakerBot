@@ -2,6 +2,7 @@ const { default: axios } = require("axios");
 const OpenAI = require("openai");
 require("dotenv").config();
 const { PREFIX } = require("../../config/prefix");
+const features = require("../../config/features");
 
 const client = new OpenAI({
     apiKey: process.env.XAI_API_KEY,
@@ -11,6 +12,8 @@ const client = new OpenAI({
 async function grokCommandBot(sock, { messages }) {
     const msg = messages[0];
     if (!msg.message || !msg.key.remoteJid) return;
+
+    if (!features.ai?.grok?.enabled) return;
 
     const chatId = msg.key.remoteJid;
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";

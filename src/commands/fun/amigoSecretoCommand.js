@@ -3,6 +3,7 @@ const fs = require('fs');
 const { admins } = require('../../config/adm');
 const mentionsController = require('../../controllers/mentionsController');
 const { PREFIX } = require('../../config/prefix');
+const features = require('../../config/features');
 
 const AMIGO_SECRETO_DATA_FILE = path.resolve(__dirname, '..', '..', '..', 'data', 'amigoSecreto', 'participantes.json');
 const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
@@ -180,6 +181,8 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
     const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
     if (msg.key.fromMe) return;
+
+    if (!features.fun?.amigoSecreto?.enabled) return;
 
     const amigoSecretoCommand = `${PREFIX}amigosecreto`;
     if (!textMessage.toLowerCase().startsWith(amigoSecretoCommand.toLowerCase())) return;

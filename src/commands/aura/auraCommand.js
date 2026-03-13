@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const mentionsController = require('../../controllers/mentionsController');
+const features = require('../../config/features');
 const { PREFIX } = require('../../config/prefix');
 
 const USERS_LEVELS_PATH = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
@@ -591,6 +592,10 @@ async function endMogDuel(sock, chatId, duel, contactsCache = {}) {
 async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     const msg = messages[0];
     if (!msg?.message || !msg.key?.remoteJid) return;
+
+    if (!features.aura?.enabled) {
+        return;
+    }
 
     const chatId = msg.key.remoteJid;
     const isGroup = chatId.endsWith('@g.us');
@@ -1323,6 +1328,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
 }
 
 async function handleAuraReaction(sock, item) {
+    if (!features.aura?.enabled) return;
+
     const reaction = item?.reaction || item;
     const msgKey = reaction?.key || item?.key;
     if (!msgKey || msgKey.fromMe) return;
