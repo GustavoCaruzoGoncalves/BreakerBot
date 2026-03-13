@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { admins } = require('../../config/adm');
+const { PREFIX } = require('../../config/prefix');
 
 const FEATURES_FILE = path.join(__dirname, '..', '..', '..', 'data', 'features.json');
 
@@ -45,7 +46,8 @@ async function featureCommandsBot(sock, { messages }) {
         : msg.key.remoteJid;
 
     const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    if (!textMessage || !textMessage.toLowerCase().startsWith('!feature')) {
+    const featureCommand = `${PREFIX}feature`;
+    if (!textMessage || !textMessage.toLowerCase().startsWith(featureCommand.toLowerCase())) {
         return;
     }
 
@@ -55,10 +57,10 @@ async function featureCommandsBot(sock, { messages }) {
     if (!subcommand || subcommand === 'help') {
         await sock.sendMessage(chatId, {
             text: "🛠 *Sistema de Sugestões de Features*\n\n" +
-                  "• !feature add descrição da feature\n" +
-                  "• !feature lista\n" +
-                  "• !feature finish número\n" +
-                  "• !feature remove número"
+                  `• ${featureCommand} add descrição da feature\n` +
+                  `• ${featureCommand} lista\n` +
+                  `• ${featureCommand} finish número\n` +
+                  `• ${featureCommand} remove número`
         }, { quoted: msg });
         return;
     }
@@ -67,7 +69,7 @@ async function featureCommandsBot(sock, { messages }) {
         const description = parts.slice(2).join(' ').trim();
         if (!description) {
             await sock.sendMessage(chatId, {
-                text: "✏️ Uso: !feature add descrição da feature"
+                text: `✏️ Uso: ${featureCommand} add descrição da feature`
             }, { quoted: msg });
             return;
         }
@@ -99,7 +101,7 @@ async function featureCommandsBot(sock, { messages }) {
         const features = readFeatures();
         if (features.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "📭 Nenhuma feature cadastrada ainda.\nUse *!feature add descrição* para criar uma."
+                text: `📭 Nenhuma feature cadastrada ainda.\nUse *${featureCommand} add descrição* para criar uma.`
             }, { quoted: msg });
             return;
         }
@@ -118,14 +120,14 @@ async function featureCommandsBot(sock, { messages }) {
         const num = parseInt(parts[2], 10);
         if (isNaN(num) || num <= 0) {
             await sock.sendMessage(chatId, {
-                text: "✏️ Uso: !feature finish número\nEx: !feature finish 2"
+                text: `✏️ Uso: ${featureCommand} finish número\nEx: ${featureCommand} finish 2`
             }, { quoted: msg });
             return;
         }
 
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
-                text: "❌ Apenas administradores podem usar *!feature finish*."
+                text: `❌ Apenas administradores podem usar *${featureCommand} finish*.`
             }, { quoted: msg });
             return;
         }
@@ -159,7 +161,7 @@ async function featureCommandsBot(sock, { messages }) {
         const num = parseInt(parts[2], 10);
         if (isNaN(num) || num <= 0) {
             await sock.sendMessage(chatId, {
-                text: "✏️ Uso: !feature remove número\nEx: !feature remove 3"
+                text: `✏️ Uso: ${featureCommand} remove número\nEx: ${featureCommand} remove 3`
             }, { quoted: msg });
             return;
         }
@@ -194,7 +196,7 @@ async function featureCommandsBot(sock, { messages }) {
     }
 
     await sock.sendMessage(chatId, {
-        text: "❓ Subcomando inválido.\nUse:\n• !feature add descrição\n• !feature lista\n• !feature finish número\n• !feature remove número"
+            text: `❓ Subcomando inválido.\nUse:\n• ${featureCommand} add descrição\n• ${featureCommand} lista\n• ${featureCommand} finish número\n• ${featureCommand} remove número`
     }, { quoted: msg });
 }
 

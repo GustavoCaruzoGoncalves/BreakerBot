@@ -5,6 +5,7 @@ const http = require('http');
 const sharp = require('sharp');
 const mentionsController = require('../../controllers/mentionsController');
 const { admins } = require('../../config/adm');
+const { PREFIX } = require('../../config/prefix');
 
 const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
 
@@ -338,8 +339,9 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             const mentionInfo = mentionsController.processSingleMention(userToMention, contactsCache);
             let percentage = getRandomPercentage();
             let replyText;
+            const leitadaCommand = `${PREFIX}leitada`;
             
-            if (isPedraoNumber(userToMention) && textMessage.startsWith("!leitada")) {
+            if (isPedraoNumber(userToMention) && textMessage.startsWith(leitadaCommand)) {
                 percentage = 100;
                 replyText = `${mentionInfo.mentionText} levou ${percentage}% ${customText}! ${emoji} KKKKKKKKKKK`;
                 
@@ -349,7 +351,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                         sticker: fs.readFileSync(stickerPath),
                     }, { quoted: msg });
                 }
-            } else if (textMessage.startsWith("!leitada")){
+            } else if (textMessage.startsWith(leitadaCommand)){
                 replyText = `${mentionInfo.mentionText} levou ${percentage}% ${customText}! ${emoji}`;
             } else {
                 replyText = `${mentionInfo.mentionText} é ${percentage}% ${customText}! ${emoji}`;
@@ -371,8 +373,9 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 let percentage = getRandomPercentage();
                 let replyText;
                 const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
+                const leitadaCommand = `${PREFIX}leitada`;
                 
-                if (textMessage.startsWith("!leitada")){
+                if (textMessage.startsWith(leitadaCommand)){
                     replyText = `Você levou ${percentage}% ${customText}! ${emoji}`;
                 } else {
                     replyText = `Você é ${percentage}% ${customText}! ${emoji}`;
@@ -385,8 +388,9 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             } else if (nameArgument) {
                 let percentage = getRandomPercentage();
                 let replyText;
+                const leitadaCommand = `${PREFIX}leitada`;
                 
-                if (isPedraoVariation(nameArgument) && textMessage.startsWith("!leitada")) {
+                if (isPedraoVariation(nameArgument) && textMessage.startsWith(leitadaCommand)) {
                     percentage = 100;
                     replyText = `${nameArgument} levou ${percentage}% ${customText}! ${emoji} KKKKKKKKKKK`;
                     
@@ -396,7 +400,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                             sticker: fs.readFileSync(stickerPath),
                         }, { quoted: msg });
                     }
-                } else if (textMessage.startsWith("!leitada")){
+                } else if (textMessage.startsWith(leitadaCommand)){
                     replyText = `${nameArgument} levou ${percentage}% ${customText}! ${emoji}`;
                 } else {
                     replyText = `${nameArgument} é ${percentage}% ${customText}! ${emoji}`;
@@ -447,71 +451,98 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.startsWith("!gay")) {
+    const gayCommand = `${PREFIX}gay`;
+    const cornoCommand = `${PREFIX}corno`;
+    const heteroCommand = `${PREFIX}hetero`;
+    const chatoCommand = `${PREFIX}chato`;
+    const petistaCommand = `${PREFIX}petista`;
+    const bolsonaristaCommand = `${PREFIX}bolsonarista`;
+    const leitadaCommand = `${PREFIX}leitada`;
+    const burroCommand = `${PREFIX}burro`;
+    const pintoCommand = `${PREFIX}pinto`;
+    const fazolCommand = `${PREFIX}fazol`;
+    const marcacoesCommand = `${PREFIX}marcacoes`;
+    const marcarMeCommand = `${PREFIX}marcarMe`;
+    const customNameCommand = `${PREFIX}customName`;
+    const setCustomNameCommand = `${PREFIX}setCustomName`;
+    const shipCommand = `${PREFIX}ship`;
+    const hugCommand = `${PREFIX}hug`;
+    const transarCommand = `${PREFIX}transar`;
+    const arrebentarCommand = `${PREFIX}arrebentar`;
+    const vumvumCommand = `${PREFIX}vumvum`;
+    const pfpCommand = `${PREFIX}pfp`;
+    const pfpDeadCommand = `${PREFIX}pfpdead`;
+    const pfpGayCommand = `${PREFIX}pfpgay`;
+    const pfpBolsonaroCommand = `${PREFIX}pfpbolsonaro`;
+    const pfpBolsonaro2Command = `${PREFIX}pfpbolsonaro2`;
+    const pfpBolsonaro3Command = `${PREFIX}pfpbolsonaro3`;
+    const rankingGayCommand = `${PREFIX}rankingGay`;
+
+    if (textMessage.startsWith(gayCommand)) {
         await handleCommand({
-            command: "!gay",
+            command: gayCommand,
             emoji: "🏳‍🌈🏳‍🌈🏳‍🌈",
             customText: "gay"
         });
     }
 
-    if (textMessage.startsWith("!corno")) {
+    if (textMessage.startsWith(cornoCommand)) {
         await handleCommand({
-            command: "!corno",
+            command: cornoCommand,
             emoji: "🐂🐂🐂",
             customText: "corno"
         });
     }
 
-    if (textMessage.startsWith("!hetero")) {
+    if (textMessage.startsWith(heteroCommand)) {
         await handleCommand({
-            command: "!hetero",
+            command: heteroCommand,
             emoji: "🩲",
             customText: "hétero"
         });
     }
 
-    if (textMessage.startsWith("!chato")) {
+    if (textMessage.startsWith(chatoCommand)) {
         await handleCommand({
-            command: "!chato",
+            command: chatoCommand,
             emoji: "😡",
             customText: "chato"
         });
     }
 
-    if (textMessage.startsWith("!petista")) {
+    if (textMessage.startsWith(petistaCommand)) {
         await handleCommand({
-            command: "!petista",
+            command: petistaCommand,
             emoji: "🚩🚩🚩",
             customText: "petista"
         });
     }
 
-    if (textMessage.startsWith("!bolsonarista")) {
+    if (textMessage.startsWith(bolsonaristaCommand)) {
         await handleCommand({
-            command: "!bolsonarista",
+            command: bolsonaristaCommand,
             emoji: "🇧🇷🇧🇷🇧🇷",
             customText: "bolsonarista"
         });
     }
 
-    if (textMessage.startsWith("!leitada")) {
+    if (textMessage.startsWith(leitadaCommand)) {
         await handleCommand({
-            command: "!leitada",
+            command: leitadaCommand,
             emoji: "🥛🥛🥛",
             customText: "de leitada"
         });
     }
 
-    if (textMessage.startsWith("!burro")) {
+    if (textMessage.startsWith(burroCommand)) {
         await handleCommand({
-            command: "!burro",
+            command: burroCommand,
             emoji: "🫏🫏🫏",
             customText: "burro"
         });
     }
 
-    if (textMessage.startsWith("!pinto")) {
+    if (textMessage.startsWith(pintoCommand)) {
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
         
         const isSpecial = Math.random() < 0.01;
@@ -547,7 +578,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }, { quoted: msg });
             }
         } else {
-            const nameArgument = textMessage.slice(6).trim();
+            const nameArgument = textMessage.slice(pintoCommand.length).trim();
 
             if (isSelfReference(nameArgument)) {
                 let replyText;
@@ -597,7 +628,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: `Por favor, mencione um usuário ou forneça um nome com o comando !pinto nome.`,
+                text: `Por favor, mencione um usuário ou forneça um nome com o comando ${pintoCommand} nome.`,
                 }, { quoted: msg });
             }
         }
@@ -642,7 +673,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!fazol") || textMessage.startsWith("!FAZOL")) {
+    if (textMessage.startsWith(fazolCommand) || textMessage.toUpperCase().startsWith(fazolCommand.toUpperCase())) {
         const videoPath = path.resolve(__dirname, '..', '..', '..', 'assets', 'MarioFazOL.mp4');
 
         if (fs.existsSync(videoPath)) {
@@ -657,14 +688,14 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.startsWith("!marcacoes")) {
+    if (textMessage.startsWith(marcacoesCommand)) {
         const args = textMessage.slice(11).trim().toLowerCase();
         const isAdmin = admins.includes(sender);
         
         if (args === "on") {
             if (!isAdmin) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Você não tem permissão para usar este comando. Somente administradores podem usar `!marcacoes on`.",
+                    text: `❌ Você não tem permissão para usar este comando. Somente administradores podem usar \`${marcacoesCommand} on\`.`,
                 }, { quoted: msg });
                 return;
             }
@@ -675,7 +706,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         } else if (args === "off") {
             if (!isAdmin) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Você não tem permissão para usar este comando. Somente administradores podem usar `!marcacoes off`.",
+                    text: `❌ Você não tem permissão para usar este comando. Somente administradores podem usar \`${marcacoesCommand} off\`.`,
                 }, { quoted: msg });
                 return;
             }
@@ -686,13 +717,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         } else {
             const status = mentionsController.getMentionsEnabled() ? "ativadas" : "desativadas";
             await sock.sendMessage(chatId, {
-                text: `📋 Status das marcações: ${status}\n\nUse !marcacoes on para ativar ou !marcacoes off para desativar.`,
+                text: `📋 Status das marcações: ${status}\n\nUse ${marcacoesCommand} on para ativar ou ${marcacoesCommand} off para desativar.`,
             }, { quoted: msg });
         }
         return;
     }
 
-    if (textMessage.startsWith("!marcarMe") || textMessage.startsWith("!marcarme")) {
+    if (textMessage.startsWith(marcarMeCommand) || textMessage.toLowerCase().startsWith(marcarMeCommand.toLowerCase())) {
         const args = textMessage.slice(9).trim().toLowerCase();
         
         const userJid = msg.key.participantAlt || msg.key.participant || sender;
@@ -713,20 +744,20 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             const userPref = mentionsController.getUserMentionPreference(userJid) ? "ativadas" : "desativadas";
             const globalStatus = mentionsController.getMentionsEnabled() ? "ativadas" : "desativadas";
             await sock.sendMessage(chatId, {
-                text: `📋 Suas marcações pessoais: ${userPref}\n📋 Marcações globais: ${globalStatus}\n\nUse !marcarMe on para ativar ou !marcarMe off para desativar suas marcações pessoais.`,
+                text: `📋 Suas marcações pessoais: ${userPref}\n📋 Marcações globais: ${globalStatus}\n\nUse ${marcarMeCommand} on para ativar ou ${marcarMeCommand} off para desativar suas marcações pessoais.`,
             }, { quoted: msg });
         }
         return;
     }
 
-    if (textMessage.startsWith("!setCustomName")) {
+    if (textMessage.startsWith(setCustomNameCommand)) {
         const args = textMessage.slice(15).trim();
         
         const userJid = msg.key.participantAlt || msg.key.participant || sender;
         
         if (!args) {
             await sock.sendMessage(chatId, {
-                text: "📝 *Uso:* !setCustomName \"nome\"\n\n*Exemplo:* !setCustomName \"João Silva\"\n\nO nome deve estar entre aspas.",
+                text: `📝 *Uso:* ${setCustomNameCommand} "nome"\n\n*Exemplo:* ${setCustomNameCommand} "João Silva"\n\nO nome deve estar entre aspas.`,
             }, { quoted: msg });
             return;
         }
@@ -734,7 +765,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         const match = args.match(/^["'](.+?)["']$/);
         if (!match) {
             await sock.sendMessage(chatId, {
-                text: "❌ O nome deve estar entre aspas!\n\n*Exemplo:* !setCustomName \"João Silva\"",
+                text: `❌ O nome deve estar entre aspas!\n\n*Exemplo:* ${setCustomNameCommand} "João Silva"`,
             }, { quoted: msg });
             return;
         }
@@ -756,13 +787,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         
         mentionsController.setCustomName(userJid, customName);
         await sock.sendMessage(chatId, {
-            text: `✅ Nome personalizado definido como: "${customName}"\n\nUse !customName on para ativar ou !customName off para desativar.`,
+            text: `✅ Nome personalizado definido como: "${customName}"\n\nUse ${customNameCommand} on para ativar ou ${customNameCommand} off para desativar.`,
         }, { quoted: msg });
         return;
     }
 
-    if (textMessage.startsWith("!customName")) {
-        const args = textMessage.slice(12).trim().toLowerCase();
+    if (textMessage.startsWith(customNameCommand)) {
+        const args = textMessage.slice(customNameCommand.length).trim().toLowerCase();
         
         const userJid = msg.key.participantAlt || msg.key.participant || sender;
         
@@ -791,9 +822,9 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             if (customNameValue) {
                 statusMessage += `\n📝 Nome atual: "${customNameValue}"`;
             } else {
-                statusMessage += `\n📝 Nenhum nome personalizado definido. Use !setCustomName "nome" para definir.`;
+                statusMessage += `\n📝 Nenhum nome personalizado definido. Use ${setCustomNameCommand} "nome" para definir.`;
             }
-            statusMessage += `\n\nUse !customName on para ativar ou !customName off para desativar.`;
+            statusMessage += `\n\nUse ${customNameCommand} on para ativar ou ${customNameCommand} off para desativar.`;
             
             await sock.sendMessage(chatId, {
                 text: statusMessage,
@@ -802,13 +833,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.startsWith("!ship")) {
+    if (textMessage.startsWith(shipCommand)) {
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        const inputText = textMessage.slice(5).trim();
+        const inputText = textMessage.slice(shipCommand.length).trim();
         
         if (!inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: !ship João e Maria ou !ship eu e Maria",
+                text: `Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: ${shipCommand} João e Maria ou ${shipCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -834,7 +865,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
         } else if (inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: !ship João e Maria",
+                text: `Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: ${shipCommand} João e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -862,7 +893,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
         if (!name1 || !name2) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes.\nExemplo: !ship João e Maria ou !ship eu e Maria",
+                text: `Por favor, forneça dois nomes.\nExemplo: ${shipCommand} João e Maria ou ${shipCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -876,13 +907,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!hug")) {
+    if (textMessage.startsWith(hugCommand)) {
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        const inputText = textMessage.slice(5).trim();
+        const inputText = textMessage.slice(hugCommand.length).trim();
         
         if (!inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: !hug João e Maria ou !hug eu e Maria",
+                text: `Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: ${hugCommand} João e Maria ou ${hugCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -908,7 +939,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
         } else if (inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: !hug João e Maria",
+                text: `Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: ${hugCommand} João e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -936,7 +967,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
         if (!name1 || !name2) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes.\nExemplo: !hug João e Maria ou !hug eu e Maria",
+                text: `Por favor, forneça dois nomes.\nExemplo: ${hugCommand} João e Maria ou ${hugCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -949,13 +980,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!transar")) {
+    if (textMessage.startsWith(transarCommand)) {
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        const inputText = textMessage.slice(8).trim();
+        const inputText = textMessage.slice(transarCommand.length).trim();
         
         if (!inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: !transar João e Maria ou !transar eu e Maria",
+                text: `Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: ${transarCommand} João e Maria ou ${transarCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -981,7 +1012,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
         } else if (inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: !transar João e Maria",
+                text: `Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: ${transarCommand} João e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -1009,7 +1040,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
         if (!name1 || !name2) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes.\nExemplo: !transar João e Maria ou !transar eu e Maria",
+                text: `Por favor, forneça dois nomes.\nExemplo: ${transarCommand} João e Maria ou ${transarCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -1023,13 +1054,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!arrebentar")) {
+    if (textMessage.startsWith(arrebentarCommand)) {
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        const inputText = textMessage.slice(11).trim();
+        const inputText = textMessage.slice(arrebentarCommand.length).trim();
         
         if (!inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: !arrebentar João e Maria ou !arrebentar eu e Maria",
+                text: `Por favor, mencione dois usuários ou forneça dois nomes.\nExemplo: ${arrebentarCommand} João e Maria ou ${arrebentarCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -1055,7 +1086,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
         } else if (inputText && mentionedJid.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: !arrebentar João e Maria",
+                text: `Por favor, forneça dois nomes separados por 'e' ou espaço.\nExemplo: ${arrebentarCommand} João e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -1083,7 +1114,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
         if (!name1 || !name2) {
             await sock.sendMessage(chatId, {
-                text: "Por favor, forneça dois nomes.\nExemplo: !arrebentar João e Maria ou !arrebentar eu e Maria",
+                text: `Por favor, forneça dois nomes.\nExemplo: ${arrebentarCommand} João e Maria ou ${arrebentarCommand} eu e Maria`,
             }, { quoted: msg });
             return;
         }
@@ -1097,7 +1128,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
     }
 
-    if (textMessage.startsWith("!vumvum")) {
+    if (textMessage.startsWith(vumvumCommand)) {
         const audioPath = path.resolve(__dirname, '..', '..', '..', 'assets', 'vumvum.mp3');
 
         if (fs.existsSync(audioPath)) {
@@ -1115,7 +1146,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
     // ===== Comandos de foto de perfil (pfp) =====
 
-    if (textMessage.toLowerCase() === "!pfp" || textMessage.toLowerCase().startsWith("!pfp ")) {
+    if (textMessage.toLowerCase() === pfpCommand.toLowerCase() || textMessage.toLowerCase().startsWith(`${pfpCommand.toLowerCase()} `)) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1137,7 +1168,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: "📝 *Uso:* !pfp @usuario ou !pfp me\n\n*Exemplos:*\n• !pfp @usuario - Foto de outro usuário\n• !pfp me - Sua própria foto\n• !pfp - Sua própria foto"
+                    text: `📝 *Uso:* ${pfpCommand} @usuario ou ${pfpCommand} me\n\n*Exemplos:*\n• ${pfpCommand} @usuario - Foto de outro usuário\n• ${pfpCommand} me - Sua própria foto\n• ${pfpCommand} - Sua própria foto`
                 }, { quoted: msg });
                 return;
             }
@@ -1194,7 +1225,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase().startsWith("!pfpdead")) {
+    if (textMessage.toLowerCase().startsWith(pfpDeadCommand.toLowerCase())) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1216,7 +1247,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: "📝 *Uso:* !pfpdead @usuario ou !pfpdead me\n\n*Exemplos:*\n• !pfpdead @usuario - Foto de outro usuário\n• !pfpdead me - Sua própria foto\n• !pfpdead - Sua própria foto"
+                    text: `📝 *Uso:* ${pfpDeadCommand} @usuario ou ${pfpDeadCommand} me\n\n*Exemplos:*\n• ${pfpDeadCommand} @usuario - Foto de outro usuário\n• ${pfpDeadCommand} me - Sua própria foto\n• ${pfpDeadCommand} - Sua própria foto`
                 }, { quoted: msg });
                 return;
             }
@@ -1269,7 +1300,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase().startsWith("!pfpgay")) {
+    if (textMessage.toLowerCase().startsWith(pfpGayCommand.toLowerCase())) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1291,7 +1322,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: "📝 *Uso:* !pfpgay @usuario ou !pfpgay me\n\n*Exemplos:*\n• !pfpgay @usuario - Foto de outro usuário\n• !pfpgay me - Sua própria foto\n• !pfpgay - Sua própria foto"
+                    text: `📝 *Uso:* ${pfpGayCommand} @usuario ou ${pfpGayCommand} me\n\n*Exemplos:*\n• ${pfpGayCommand} @usuario - Foto de outro usuário\n• ${pfpGayCommand} me - Sua própria foto\n• ${pfpGayCommand} - Sua própria foto`
                 }, { quoted: msg });
                 return;
             }
@@ -1344,7 +1375,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase() === "!pfpbolsonaro" || textMessage.toLowerCase().startsWith("!pfpbolsonaro ")) {
+    if (textMessage.toLowerCase() === pfpBolsonaroCommand.toLowerCase() || textMessage.toLowerCase().startsWith(`${pfpBolsonaroCommand.toLowerCase()} `)) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1366,7 +1397,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: "📝 *Uso:* !pfpbolsonaro @usuario ou !pfpbolsonaro me\n\n*Exemplos:*\n• !pfpbolsonaro @usuario - Foto de outro usuário\n• !pfpbolsonaro me - Sua própria foto\n• !pfpbolsonaro - Sua própria foto"
+                    text: `📝 *Uso:* ${pfpBolsonaroCommand} @usuario ou ${pfpBolsonaroCommand} me\n\n*Exemplos:*\n• ${pfpBolsonaroCommand} @usuario - Foto de outro usuário\n• ${pfpBolsonaroCommand} me - Sua própria foto\n• ${pfpBolsonaroCommand} - Sua própria foto`
                 }, { quoted: msg });
                 return;
             }
@@ -1419,7 +1450,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase().startsWith("!pfpbolsonaro2")) {
+    if (textMessage.toLowerCase().startsWith(pfpBolsonaro2Command.toLowerCase())) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1441,7 +1472,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: "📝 *Uso:* !pfpbolsonaro2 @usuario ou !pfpbolsonaro2 me\n\n*Exemplos:*\n• !pfpbolsonaro2 @usuario\n• !pfpbolsonaro2 me\n• !pfpbolsonaro2"
+                    text: `📝 *Uso:* ${pfpBolsonaro2Command} @usuario ou ${pfpBolsonaro2Command} me\n\n*Exemplos:*\n• ${pfpBolsonaro2Command} @usuario\n• ${pfpBolsonaro2Command} me\n• ${pfpBolsonaro2Command}`
                 }, { quoted: msg });
                 return;
             }
@@ -1494,7 +1525,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase().startsWith("!pfpbolsonaro3")) {
+    if (textMessage.toLowerCase().startsWith(pfpBolsonaro3Command.toLowerCase())) {
         const parts = textMessage.split(' ');
         let targetUserId;
 
@@ -1516,7 +1547,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }
             } else {
                 await sock.sendMessage(chatId, {
-                    text: "📝 *Uso:* !pfpbolsonaro3 @usuario ou !pfpbolsonaro3 me\n\n*Exemplos:*\n• !pfpbolsonaro3 @usuario\n• !pfpbolsonaro3 me\n• !pfpbolsonaro3"
+                    text: `📝 *Uso:* ${pfpBolsonaro3Command} @usuario ou ${pfpBolsonaro3Command} me\n\n*Exemplos:*\n• ${pfpBolsonaro3Command} @usuario\n• ${pfpBolsonaro3Command} me\n• ${pfpBolsonaro3Command}`
                 }, { quoted: msg });
                 return;
             }
@@ -1569,7 +1600,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.startsWith("!rankingGay")) {
+    if (textMessage.startsWith(rankingGayCommand)) {
         if (!isGroup) {
             await sock.sendMessage(chatId, {
                 text: "❌ Este comando só funciona em grupos!",

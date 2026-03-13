@@ -2,7 +2,6 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const sharp = require('sharp');
 const { default: axios } = require('axios');
 const memeTemplateService = require('../../services/memeTemplateService');
-const { PREFIX } = require('../../config/prefix');
 
 async function memeCommandsBot(sock, { messages }) {
   const msg = messages[0];
@@ -25,11 +24,14 @@ async function memeCommandsBot(sock, { messages }) {
     msg.message.conversation ||
     '';
 
-  if (!messageWithText.startsWith(PREFIX + 'kratos')) {
+  const { PREFIX } = require('../../config/prefix');
+  const kratosCommand = `${PREFIX}kratos`;
+
+  if (!messageWithText.startsWith(kratosCommand)) {
     return;
   }
 
-  let userText = messageWithText.replace(PREFIX + 'kratos', '').trim();
+  let userText = messageWithText.replace(kratosCommand, '').trim();
 
   // Se houver menção, remove o primeiro token que começa com '@' do texto
   if (mentionedJid) {
@@ -41,11 +43,7 @@ async function memeCommandsBot(sock, { messages }) {
       sender,
       {
         text:
-          'Envie/responda uma imagem com `' +
-          PREFIX +
-          'kratos <texto>` ou use `' +
-          PREFIX +
-          'kratos @usuario <texto>` para usar a foto de perfil.',
+          'Envie/responda uma imagem com `!kratos <texto>` ou use `!kratos @usuario <texto>` para usar a foto de perfil.',
       },
       { quoted: msg },
     );

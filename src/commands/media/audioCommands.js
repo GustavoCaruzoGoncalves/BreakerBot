@@ -141,13 +141,16 @@ async function audioCommandsBot(sock, { messages }) {
     const sender = msg.key.remoteJid;
     const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
 
-    if (textMessage.startsWith(PREFIX + 'play ')) {
+    const playCommandWithSpace = `${PREFIX}play `;
+    const playMp4CommandWithSpace = `${PREFIX}playmp4 `;
+
+    if (textMessage.startsWith(playCommandWithSpace)) {
         const audioPath = path.join(__dirname, 'temp_audio.webm');
         const outputPath = path.join(__dirname, 'temp_audio.mp3');
         const thumbPath = path.join(__dirname, 'temp_audio_thumb.jpg');
 
         try {
-            const query = textMessage.replace(PREFIX + 'play ', '').trim();
+            const query = textMessage.replace(playCommandWithSpace, '').trim();
             if (!query) {
                 await sock.sendMessage(sender, { text: 'Por favor, digite o nome ou link da música! 🎵' }, { quoted: msg });
                 return;
@@ -205,12 +208,12 @@ async function audioCommandsBot(sock, { messages }) {
         }
     }
 
-    if (textMessage.startsWith(PREFIX + 'playmp4 ')) {
+    if (textMessage.startsWith(playMp4CommandWithSpace)) {
         const videoPath = path.join(__dirname, 'temp_video.mp4');
         const thumbPath = path.join(__dirname, 'temp_thumb.jpg');
 
         try {
-            const query = textMessage.replace(PREFIX + 'playmp4 ', '').trim();
+            const query = textMessage.replace(playMp4CommandWithSpace, '').trim();
             if (!query) {
                 await sock.sendMessage(sender, { text: 'Por favor, digite o nome ou link do vídeo! 🎥' }, { quoted: msg });
                 return;

@@ -17,17 +17,19 @@ async function banCommandBot(sock, { messages }) {
 
     const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
 
-    if (text.startsWith(PREFIX + "ban")) {
+    const banCommand = `${PREFIX}ban`;
+
+    if (text.startsWith(banCommand)) {
         if (!isAdmin) {
             await sock.sendMessage(groupId, {
-                text: "❌ Você não tem permissão para usar este comando. Somente administradores podem usar `#ban`."
+                text: `❌ Você não tem permissão para usar este comando. Somente administradores podem usar \`${banCommand}\`.`
             });
             return;
         }
 
         if (!mentionedJid) {
             await sock.sendMessage(groupId, {
-                text: "❌ Você precisa marcar alguém para banir. Exemplo: `#ban @usuario`"
+                text: `❌ Você precisa marcar alguém para banir. Exemplo: \`${banCommand} @usuario\``
             });
             return;
         }

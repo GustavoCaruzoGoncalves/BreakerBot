@@ -1,6 +1,7 @@
 const { default: axios } = require("axios");
 const OpenAI = require("openai");
 require("dotenv").config();
+const { PREFIX } = require("../../config/prefix");
 
 const client = new OpenAI({
     apiKey: process.env.XAI_API_KEY,
@@ -14,20 +15,24 @@ async function grokCommandBot(sock, { messages }) {
     const chatId = msg.key.remoteJid;
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-    if (text.startsWith("!grokimg") || text.startsWith("#grokimg")) {
-        const query = text.replace("!grokimg", "").replace("#grokimg", "").trim();
+    const grokImgCommand = `${PREFIX}grokimg`;
+    const grokCommand = `${PREFIX}grok`;
+    const grokAngryCommand = `${PREFIX}grokangry`;
+
+    if (text.startsWith(grokImgCommand)) {
+        const query = text.replace(grokImgCommand, "").trim();
         const imageUrl = await askGrokImage(query);
         if (imageUrl) {
             await sock.sendMessage(chatId, { image: { url: imageUrl }, caption: "Aqui está sua imagem gerada!" });
         } else {
             await sock.sendMessage(chatId, { text: "Não foi possível gerar a imagem." });
         }
-    } else if (text.startsWith("!grok ") || text.startsWith("#grok ")) {
-        const query = text.replace("!grok", "").replace("#grok", "").trim();
+    } else if (text.startsWith(`${grokCommand} `)) {
+        const query = text.replace(grokCommand, "").trim();
         const response = await askGrok(query);
         await sock.sendMessage(chatId, { text: response });
-    } else if (text.startsWith("!grokangry ") || text.startsWith("#grokangry ")) {
-        const query = text.replace("!grokangry", "").replace("#grokangry", "").trim();
+    } else if (text.startsWith(`${grokAngryCommand} `)) {
+        const query = text.replace(grokAngryCommand, "").trim();
         const response = await askGrokAngry(query);
         await sock.sendMessage(chatId, { text: response });
     }

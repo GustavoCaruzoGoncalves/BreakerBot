@@ -1,13 +1,12 @@
-const PREFIX = (process.env.BOT_PREFIX || '#').trim() || '#';
+require("dotenv").config();
 
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+if (!process.env.BOT_PREFIX) {
+  throw new Error(
+    "BOT_PREFIX não definido no ambiente. Configure BOT_PREFIX no arquivo .env.",
+  );
 }
 
-const PREFIX_REGEX = escapeRegex(PREFIX);
+const PREFIX = process.env.BOT_PREFIX;
 
-module.exports = {
-  PREFIX,
-  PREFIX_REGEX,
-};
+module.exports = { PREFIX };
 

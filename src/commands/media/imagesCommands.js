@@ -22,9 +22,13 @@ async function imagesCommandsBot(sock, { messages }) {
     const isReplyToVideo = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
     const messageWithText = msg.message.imageMessage?.caption || msg.message.videoMessage?.caption || msg.message.extendedTextMessage?.text || '';
 
+    const stickerCommand = `${PREFIX}sticker`;
+    const fStickerCommand = `${PREFIX}fsticker`;
+    const toImgCommand = `${PREFIX}toimg`;
+
     const isStickerCommand =
-        messageWithText.startsWith(PREFIX + "sticker") ||
-        messageWithText.startsWith(PREFIX + "fsticker");
+        messageWithText.startsWith(stickerCommand) ||
+        messageWithText.startsWith(fStickerCommand);
     
     if (isStickerCommand) {
         console.log("[DEBUG] Comando de figurinha detectado");
@@ -66,16 +70,16 @@ async function imagesCommandsBot(sock, { messages }) {
                     console.log("[DEBUG] Tamanho do buffer:", buffer.length);
 
                     const command = messageWithText;
-                    await processVideoToSticker(buffer, stickerPath, command);
+                    await processVideoToSticker(buffer, stickerPath, command, stickerCommand, fStickerCommand);
                 } else {
                     console.log("[DEBUG] Processando imagem...");
                     const sharpInstance = sharp(buffer).webp();
 
                     const command = messageWithText;
                     
-                    if (command.startsWith(PREFIX + "sticker")) {
+                    if (command.startsWith(stickerCommand)) {
                         sharpInstance.resize(1080, 1920, { fit: 'cover' });
-                    } else if (command.startsWith(PREFIX + "fsticker")) {
+                    } else if (command.startsWith(fStickerCommand)) {
                         sharpInstance.resize(512, 512, { fit: 'cover' });
                     }
 
@@ -103,11 +107,11 @@ async function imagesCommandsBot(sock, { messages }) {
             }
         } else {
             console.log("[DEBUG] Nenhuma mídia detectada para criar sticker.");
-            await sock.sendMessage(sender, { text: "Envie ou responda a uma imagem, vídeo ou GIF com `!sticker` ou `!fsticker`!" }, { quoted: msg });
+            await sock.sendMessage(sender, { text: `Envie ou responda a uma imagem, vídeo ou GIF com \`${stickerCommand}\` ou \`${fStickerCommand}\`!` }, { quoted: msg });
         }
     }
 
-    if (messageWithText.startsWith(PREFIX + "toimg") && isReplyToSticker) {
+    if (messageWithText.startsWith(toImgCommand) && isReplyToSticker) {
         if (isSticker) {
             console.log("[DEBUG] A mensagem é uma figurinha, evitando envio junto com o !toimg.");
             return;
@@ -138,7 +142,7 @@ async function imagesCommandsBot(sock, { messages }) {
     }
 }
 
-async function processVideoToSticker(videoBuffer, outputPath, command) {
+async function processVideoToSticker(videoBuffer, outputPath, command, stickerCommand, fStickerCommand) {
     return new Promise(async (resolve, reject) => {
         const tempVideoPath = path.join(__dirname, 'temp_video.mp4');
         const tempWebpPath = path.join(__dirname, 'temp_sticker.webp');
@@ -156,14 +160,14 @@ async function processVideoToSticker(videoBuffer, outputPath, command) {
         }
 
         let dimensions;
-        if (command.startsWith("!sticker")) {
+        if (command.startsWith(stickerCommand)) {
             try {
                 dimensions = '512:512';
             } catch (error) {
                 console.error('[ERRO] Erro ao detectar dimensões:', error);
                 dimensions = '512:512';
             }
-        } else if (command.startsWith("!fsticker")) {
+        } else if (command.startsWith(fStickerCommand)) {
             dimensions = '512:512';
         } else {
             dimensions = '512:512';
@@ -173,7 +177,7 @@ async function processVideoToSticker(videoBuffer, outputPath, command) {
         console.log("[DEBUG] Dimensões:", dimensions);
 
         let videoFilter;
-        if (command.startsWith("!sticker")) {
+        if (command.startsWith(stickerCommand)) {
             videoFilter = `scale=${dimensions}`;
         } else {
             videoFilter = `scale=${dimensions}:force_original_aspect_ratio=decrease,pad=${dimensions}:(ow-iw)/2:(oh-ih)/2:color=black`;

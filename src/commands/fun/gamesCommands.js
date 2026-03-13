@@ -1,6 +1,7 @@
 const { default: axios } = require("axios");
 require("dotenv").config();
 const mentionsController = require("../../controllers/mentionsController");
+const { PREFIX } = require("../../config/prefix");
 
 const playerGames = new Map();
 
@@ -142,7 +143,9 @@ async function gamesCommandsBot(sock, { messages }) {
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
     const playerId = getPlayerId(msg);
 
-    if (text === "!trivia start") {
+    const triviaCommand = `${PREFIX}trivia`;
+
+    if (text === `${triviaCommand} start`) {
         const playerGame = resetPlayerGame(playerId);
         const { prefix, mentions } = getPlayerMentionPrefix(playerId);
         
@@ -168,12 +171,12 @@ async function gamesCommandsBot(sock, { messages }) {
         askNextQuestion(sock, chatId, playerId);
     }
 
-    else if (text && text.startsWith("!trivia resposta")) {
+    else if (text && text.startsWith(`${triviaCommand} resposta`)) {
         const userAnswer = text.split(" ")[2];
         const { prefix, mentions } = getPlayerMentionPrefix(playerId);
         
         if (!userAnswer) {
-            await sendMessageWithRetry(sock, chatId, `${prefix}Por favor, forneça uma resposta (A, B, C ou D). Exemplo: !trivia resposta A`, mentions);
+            await sendMessageWithRetry(sock, chatId, `${prefix}Por favor, forneça uma resposta (A, B, C ou D). Exemplo: ${triviaCommand} resposta A`, mentions);
             return;
         }
 

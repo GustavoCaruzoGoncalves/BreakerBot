@@ -2,6 +2,7 @@ const { default: axios } = require("axios");
 const { downloadMediaMessage } = require("@whiskeysockets/baileys");
 require("dotenv").config();
 const { admins } = require("../../config/adm");
+const { PREFIX } = require("../../config/prefix");
 
 const chatMemory = {};
 
@@ -30,12 +31,13 @@ async function gptCommandBot(sock, { messages }) {
         chatMemory[chatId] = [];
     }
 
+    const gpt5Command = `${PREFIX}gpt5`;
+    const gptCommand = `${PREFIX}gpt`;
+
     if (
         text &&
-        !text.startsWith("!gpt5") &&
-        !text.startsWith("!gpt") &&
-        !text.startsWith("#gpt5") &&
-        !text.startsWith("#gpt")
+        !text.startsWith(gpt5Command) &&
+        !text.startsWith(gptCommand)
     ) {
         chatMemory[chatId].push({ role: "user", content: text });
 
@@ -44,10 +46,10 @@ async function gptCommandBot(sock, { messages }) {
         }
     }
 
-    if (text.startsWith("!resetGpt")) {
+    if (text.startsWith(`${PREFIX}resetGpt`)) {
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
-                text: "❌ Você não tem permissão para usar esse comando. Somente administradores podem usar `!reset`."
+                text: `❌ Você não tem permissão para usar esse comando. Somente administradores podem usar \`${PREFIX}reset\`.`
             });
             return;
         }
@@ -59,16 +61,12 @@ async function gptCommandBot(sock, { messages }) {
 
     // ===================== GPT-5 NANO (ATIVO) =====================
     if (
-        text.startsWith("!gpt5") ||
-        text.startsWith("!gpt ") ||
-        text.startsWith("#gpt5") ||
-        text.startsWith("#gpt ")
+        text.startsWith(gpt5Command) ||
+        text.startsWith(`${gptCommand} `)
     ) {
         let userPrompt = text
-            .replace("!gpt5", "")
-            .replace("!gpt ", "")
-            .replace("#gpt5", "")
-            .replace("#gpt ", "")
+            .replace(gpt5Command, "")
+            .replace(`${gptCommand} `, "")
             .trim();
         let imageBuffer = null;
 
@@ -108,7 +106,7 @@ async function gptCommandBot(sock, { messages }) {
 
         if (userPrompt.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "❌ Digite uma pergunta junto com `#gpt5` ou `#gpt`."
+                text: `❌ Digite uma pergunta junto com \`${gpt5Command}\` ou \`${gptCommand}\`.`
             });
             return;
         }

@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { admins } = require('../../config/adm');
+const { PREFIX } = require('../../config/prefix');
 
 async function sendJsCommandBot(sock, { messages }) {
     const msg = messages[0];
@@ -18,12 +19,15 @@ async function sendJsCommandBot(sock, { messages }) {
 
     if (msg.key.fromMe) return;
 
-    if (textMessage.startsWith("!js")) {
-        console.log(`[DEBUG] Comando !js detectado de ${sender} no chat ${chatId}`);
+    const jsCommand = `${PREFIX}js`;
+    const sendJsonCommand = `${PREFIX}sendJson`;
+
+    if (textMessage.startsWith(jsCommand)) {
+        console.log(`[DEBUG] Comando ${jsCommand} detectado de ${sender} no chat ${chatId}`);
 
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
-                text: "❌ Você não tem permissão para usar este comando. Apenas administradores podem executar !js.",
+                text: `❌ Você não tem permissão para usar este comando. Apenas administradores podem executar ${jsCommand}.`,
             }, { quoted: msg });
             return;
         }
@@ -57,12 +61,12 @@ async function sendJsCommandBot(sock, { messages }) {
         }
     }
 
-    if (textMessage.startsWith("!sendJson")) {
-        console.log(`[DEBUG] Comando !sendJson detectado de ${sender} no chat ${chatId}`);
+    if (textMessage.startsWith(sendJsonCommand)) {
+        console.log(`[DEBUG] Comando ${sendJsonCommand} detectado de ${sender} no chat ${chatId}`);
 
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
-                text: "❌ Você não tem permissão para usar este comando. Apenas administradores podem executar !sendJson.",
+                text: `❌ Você não tem permissão para usar este comando. Apenas administradores podem executar ${sendJsonCommand}.`,
             }, { quoted: msg });
             return;
         }

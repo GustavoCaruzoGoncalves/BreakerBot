@@ -2,6 +2,7 @@ const { default: axios } = require("axios");
 const { downloadMediaMessage } = require("@whiskeysockets/baileys");
 require("dotenv").config();
 const { admins } = require("../../config/adm");
+const { PREFIX } = require("../../config/prefix");
 
 const chatMemory = {};
 
@@ -30,7 +31,11 @@ async function zhipuCommandBot(sock, { messages }) {
         chatMemory[chatId] = [];
     }
 
-    if (text && !text.startsWith("!zhipu") && !text.startsWith("#zhipu")) {
+    const zhipuCommand = `${PREFIX}zhipu`;
+    const resetZhipuCommand = `${PREFIX}resetZhipu`;
+    const quizCommand = `${PREFIX}quiz`;
+
+    if (text && !text.startsWith(zhipuCommand)) {
         chatMemory[chatId].push({ role: "user", content: text });
 
         if (chatMemory[chatId].length > 30) {
@@ -38,10 +43,10 @@ async function zhipuCommandBot(sock, { messages }) {
         }
     }
 
-    if (text.startsWith("!resetZhipu")) {
+    if (text.startsWith(resetZhipuCommand)) {
         if (!admins.includes(sender)) {
             await sock.sendMessage(chatId, {
-                text: "❌ Você não tem permissão para usar esse comando. Somente administradores podem usar `!reset`."
+                text: `❌ Você não tem permissão para usar esse comando. Somente administradores podem usar \`${PREFIX}reset\`.`
             });
             return;
         }
@@ -51,8 +56,8 @@ async function zhipuCommandBot(sock, { messages }) {
         return;
     }
 
-    if (text.startsWith("!zhipu") || text.startsWith("#zhipu")) {
-        let userPrompt = text.replace("!zhipu", "").replace("#zhipu", "").trim();
+    if (text.startsWith(zhipuCommand)) {
+        let userPrompt = text.replace(zhipuCommand, "").trim();
         let imageBuffer = null;
 
         const promptMessages = [];
@@ -91,7 +96,7 @@ async function zhipuCommandBot(sock, { messages }) {
 
         if (userPrompt.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "❌ Digite uma pergunta junto com `#zhipu`."
+                text: `❌ Digite uma pergunta junto com \`${zhipuCommand}\`.`
             });
             return;
         }
@@ -117,7 +122,7 @@ async function zhipuCommandBot(sock, { messages }) {
         await sock.sendMessage(chatId, { text: response });
     }
 
-    if (text.startsWith("!quiz")) {
+    if (text.startsWith(quizCommand)) {
         const response = await askZhipuQuiz();
         await sock.sendMessage(chatId, { text: response });
         return;

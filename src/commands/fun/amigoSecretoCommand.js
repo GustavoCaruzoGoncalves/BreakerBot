@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { admins } = require('../../config/adm');
 const mentionsController = require('../../controllers/mentionsController');
+const { PREFIX } = require('../../config/prefix');
 
 const AMIGO_SECRETO_DATA_FILE = path.resolve(__dirname, '..', '..', '..', 'data', 'amigoSecreto', 'participantes.json');
 const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
@@ -180,7 +181,8 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
 
     if (msg.key.fromMe) return;
 
-    if (!textMessage.toLowerCase().startsWith('!amigosecreto')) return;
+    const amigoSecretoCommand = `${PREFIX}amigosecreto`;
+    if (!textMessage.toLowerCase().startsWith(amigoSecretoCommand.toLowerCase())) return;
 
     const partes = textMessage.toLowerCase().split(' ');
     const comando = partes[1];
@@ -198,7 +200,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             const participantesData = loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
+                    text: `❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *${amigoSecretoCommand} add* primeiro para adicionar participantes.`,
                 }, { quoted: msg });
                 return;
             }
@@ -216,11 +218,11 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            const presente = textMessage.slice('!amigosecreto listapresente add'.length).trim();
+            const presente = textMessage.slice(`${amigoSecretoCommand.toLowerCase()} listapresente add`.length).trim();
 
             if (!presente) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Você precisa especificar o presente que deseja!\n\n💡 Use: !amigoSecreto listaPresente add <presente desejado>",
+                    text: `❌ Você precisa especificar o presente que deseja!\n\n💡 Use: ${amigoSecretoCommand} listaPresente add <presente desejado>`,
                 }, { quoted: msg });
                 return;
             }
@@ -253,7 +255,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             const participantesData = loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
+                    text: `❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *${amigoSecretoCommand} add* primeiro para adicionar participantes.`,
                 }, { quoted: msg });
                 return;
             }
@@ -297,7 +299,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             const participantesData = loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
+                    text: `❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *${amigoSecretoCommand} add* primeiro para adicionar participantes.`,
                 }, { quoted: msg });
                 return;
             }
@@ -315,11 +317,11 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            const presente = textMessage.slice('!amigosecreto listapresente edit'.length).trim();
+            const presente = textMessage.slice(`${amigoSecretoCommand.toLowerCase()} listapresente edit`.length).trim();
 
             if (!presente) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Você precisa especificar o novo presente!\n\n💡 Use: !amigoSecreto listaPresente edit <novo presente>",
+                    text: `❌ Você precisa especificar o novo presente!\n\n💡 Use: ${amigoSecretoCommand} listaPresente edit <novo presente>`,
                 }, { quoted: msg });
                 return;
             }
@@ -347,7 +349,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             const match = textMessage.match(/grupo\s+["'](.+?)["']/i);
             if (!match) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Você precisa especificar o nome do grupo entre aspas!\n\n💡 Use: !amigoSecreto listaPresente grupo \"Nome do Grupo\"",
+                    text: `❌ Você precisa especificar o nome do grupo entre aspas!\n\n💡 Use: ${amigoSecretoCommand} listaPresente grupo "Nome do Grupo"`,
                 }, { quoted: msg });
                 return;
             }
@@ -424,15 +426,15 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         } else {
             if (!isGroup) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Este comando só pode ser usado em grupos!\n\n💡 Para usar no privado, use: !amigoSecreto listaPresente grupo \"Nome do Grupo\"",
+                    text: `❌ Este comando só pode ser usado em grupos!\n\n💡 Para usar no privado, use: ${amigoSecretoCommand} listaPresente grupo "Nome do Grupo"`,
                 }, { quoted: msg });
                 return;
             }
 
-            const participantesData = loadParticipantes();
+                const participantesData = loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
-                    text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
+                    text: `❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *${amigoSecretoCommand} add* primeiro para adicionar participantes.`,
                 }, { quoted: msg });
                 return;
             }
@@ -530,7 +532,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         
         if (participantesList.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "❌ Você precisa marcar os participantes ou escrever 'me'/'eu' para se adicionar!\n\n💡 Use: !amigoSecreto add @participante1 @participante2 ...\n💡 Ou: !amigoSecreto add me @participante1 @participante2 ...",
+                text: `❌ Você precisa marcar os participantes ou escrever 'me'/'eu' para se adicionar!\n\n💡 Use: ${amigoSecretoCommand} add @participante1 @participante2 ...\n💡 Ou: ${amigoSecretoCommand} add me @participante1 @participante2 ...`,
             }, { quoted: msg });
             return;
         }
@@ -587,7 +589,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             const nome = nomes[jid] || jid.split('@')[0];
             mensagemConfirmacao += `${index + 1}. ${nome} (@${jid.split('@')[0]})\n`;
         });
-        mensagemConfirmacao += `\n💡 Use *!amigoSecreto sortear* para realizar o sorteio!`;
+        mensagemConfirmacao += `\n💡 Use *${amigoSecretoCommand} sortear* para realizar o sorteio!`;
 
         await sock.sendMessage(chatId, {
             text: mensagemConfirmacao,
@@ -602,7 +604,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
 
         if (participantes.length < 2) {
             await sock.sendMessage(chatId, {
-                text: "❌ É necessário pelo menos 2 participantes para realizar o sorteio!\n\n💡 Use *!amigoSecreto add* marcando os participantes primeiro.",
+                text: `❌ É necessário pelo menos 2 participantes para realizar o sorteio!\n\n💡 Use *${amigoSecretoCommand} add* marcando os participantes primeiro.`,
             }, { quoted: msg });
             return;
         }
@@ -683,7 +685,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
 
         if (participantes.length === 0) {
             await sock.sendMessage(chatId, {
-                text: "❌ Nenhum participante adicionado ainda!\n\n💡 Use *!amigoSecreto add* marcando os participantes primeiro.",
+                text: `❌ Nenhum participante adicionado ainda!\n\n💡 Use *${amigoSecretoCommand} add* marcando os participantes primeiro.`,
             }, { quoted: msg });
             return;
         }
@@ -694,7 +696,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         participantes.forEach((jid, index) => {
             mensagemLista += `${index + 1}. @${jid.split('@')[0]}\n`;
         });
-        mensagemLista += `\n💡 Use *!amigoSecreto sortear* para realizar o sorteio!`;
+        mensagemLista += `\n💡 Use *${amigoSecretoCommand} sortear* para realizar o sorteio!`;
 
         await sock.sendMessage(chatId, {
             text: mensagemLista,
@@ -704,21 +706,21 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
     } else {
         await sock.sendMessage(chatId, {
             text: `📖 *Como usar o Amigo Secreto:*\n\n` +
-                `✅ *!amigoSecreto add* - Marque todos os participantes\n` +
+                `✅ *${amigoSecretoCommand} add* - Marque todos os participantes\n` +
                 `   Você pode escrever "me" ou "eu" para se adicionar\n` +
-                `📋 *!amigoSecreto lista* - Mostra a lista de participantes\n` +
-                `🎁 *!amigoSecreto listaPresente add <presente>* - Adiciona seu desejo de presente\n` +
+                `📋 *${amigoSecretoCommand} lista* - Mostra a lista de participantes\n` +
+                `🎁 *${amigoSecretoCommand} listaPresente add <presente>* - Adiciona seu desejo de presente\n` +
                 `   (Use múltiplas vezes para adicionar mais presentes)\n` +
-                `✏️ *!amigoSecreto listaPresente edit <presente>* - Edita seu presente\n` +
-                `🗑️ *!amigoSecreto listaPresente delete* - Remove seu presente\n` +
-                `📋 *!amigoSecreto listaPresente* - Lista todos os presentes do grupo\n` +
-                `📋 *!amigoSecreto listaPresente grupo "nome"* - Lista presentes no PV\n` +
-                `🎲 *!amigoSecreto sortear* - Realiza o sorteio e envia no PV de cada um\n\n` +
+                `✏️ *${amigoSecretoCommand} listaPresente edit <presente>* - Edita seu presente\n` +
+                `🗑️ *${amigoSecretoCommand} listaPresente delete* - Remove seu presente\n` +
+                `📋 *${amigoSecretoCommand} listaPresente* - Lista todos os presentes do grupo\n` +
+                `📋 *${amigoSecretoCommand} listaPresente grupo "nome"* - Lista presentes no PV\n` +
+                `🎲 *${amigoSecretoCommand} sortear* - Realiza o sorteio e envia no PV de cada um\n\n` +
                 `💡 Exemplos:\n` +
-                `   !amigoSecreto add @pessoa1 @pessoa2 @pessoa3\n` +
-                `   !amigoSecreto add me @pessoa1 @pessoa2\n` +
-                `   !amigoSecreto listaPresente add Um livro\n` +
-                `   !amigoSecreto listaPresente add Um caderno`,
+                `   ${amigoSecretoCommand} add @pessoa1 @pessoa2 @pessoa3\n` +
+                `   ${amigoSecretoCommand} add me @pessoa1 @pessoa2\n` +
+                `   ${amigoSecretoCommand} listaPresente add Um livro\n` +
+                `   ${amigoSecretoCommand} listaPresente add Um caderno`,
         }, { quoted: msg });
     }
 }

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const mentionsController = require('../../controllers/mentionsController');
+const { PREFIX } = require('../../config/prefix');
 
 const USERS_LEVELS_PATH = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
 
@@ -9,10 +10,10 @@ const MISSION_IDS = ['messages_500', 'reactions_500', 'duel_win', 'survive_attac
 const MISSION_CONFIG = {
     messages_500:   { target: 50, reward: 1000, label: 'Mande 50 mensagens' },
     reactions_500:  { target: 20, reward: 2000, label: 'Reaja 20x com 💀 ou ☠️' },
-    duel_win:       { target: 1,   reward: 1000, label: 'Vença 1 duelo (!mog)' },
-    survive_attack: { target: 1,   reward: 2000, label: 'Sobreviva a um ataque (!mognow)' },
+    duel_win:       { target: 1,   reward: 1000, label: 'Vença 1 duelo' },
+    survive_attack: { target: 1,   reward: 2000, label: 'Sobreviva a um ataque' },
     send_media:     { target: 1,   reward: 200,  label: 'Envie mídia (figurinha/vídeo/imagem/doc)' },
-    help_someone:   { target: 1,   reward: 100,  label: 'Ajude alguém (!respeito)' }
+    help_someone:   { target: 1,   reward: 100,  label: 'Ajude alguém' }
 };
 
 const AURA_TIERS = [
@@ -53,22 +54,22 @@ const activeRandomEvents = new Map();
 const lastRandomEventAt = new Map();
 
 const RANDOM_EVENTS = [
-    { id: 'energia_rara', chance: 0.30, message: '💠 *Uma energia rara apareceu no chat!* Primeiro a digitar *!absorver* ganha *200* de aura.', command: '!absorver', type: 'first', durationMs: 60000, effect: { type: 'aura', amount: 200 } },
-    { id: 'fenda', chance: 0.14, message: '⚡ *Uma fenda dimensional abriu!* Todos que digitarem *!entrar* nos próximos 45 segundos ganham *50* de aura.', command: '!entrar', type: 'all', durationMs: 45000, effect: { type: 'aura', amount: 50 } },
-    { id: 'cristal', chance: 0.11, message: '💎 *Um cristal de aura surgiu!* O primeiro a digitar *!pegar* recebe *150* de aura.', command: '!pegar', type: 'first', durationMs: 50000, effect: { type: 'aura', amount: 150 } },
-    { id: 'vento', chance: 0.10, message: '🌬️ *Um vento favorável passa pelo grupo!* Primeiro a digitar *!aproveitar* ganha *100* de aura.', command: '!aproveitar', type: 'first', durationMs: 55000, effect: { type: 'aura', amount: 100 } },
-    { id: 'oferenda', chance: 0.08, message: '👑 *Os deuses deixaram uma oferenda!* Quem digitar *!aceitar* primeiro ganha *300* de aura.', command: '!aceitar', type: 'first', durationMs: 60000, effect: { type: 'aura', amount: 300 } },
-    { id: 'pocao', chance: 0.06, message: '🧪 *Uma poção brilhante apareceu!* Primeiro a digitar *!beber* ganha *80* de aura.', command: '!beber', type: 'first', durationMs: 40000, effect: { type: 'aura', amount: 80 } },
-    { id: 'espirito', chance: 0.05, message: '👻 *O espírito do grupo se manifesta!* Todos que digitarem *!invocar* em 1 minuto ganham *30* de aura.', command: '!invocar', type: 'all', durationMs: 60000, effect: { type: 'aura', amount: 30 } },
-    { id: 'armadilha', chance: 0.04, message: '🕳️ *Uma armadilha sombria está ativa!* O primeiro a digitar *!tocar* verá as *consequências*. Cuidado!', command: '!tocar', type: 'first', durationMs: 50000, effect: { type: 'aura', amount: -100 } },
-    { id: 'fenda_maldita', chance: 0.03, message: '💀 *Uma fenda maldita se abre!* Quem digitar *!entrar* primeiro *perde* *150* de aura.', command: '!entrar', type: 'first', durationMs: 45000, effect: { type: 'aura', amount: -150 } },
-    { id: 'caixa', chance: 0.03, message: '📦 *Uma caixa misteriosa apareceu!* O primeiro a digitar *!abrir* pode ganhar ou perder aura… (sorte ou azar!)', command: '!abrir', type: 'first', durationMs: 50000, effect: { type: 'aura_random', options: [100, 100, -80, -80, 200] } },
-    { id: 'ruina', chance: 0.02, message: '🏛️ *Ruínas antigas emanam energia!* O primeiro a digitar *!explorar* arrisca: *+200* ou *-100* de aura.', command: '!explorar', type: 'first', durationMs: 55000, effect: { type: 'aura_random', options: [200, -100] } },
-    { id: 'nuvem', chance: 0.02, message: '☁️ *Uma nuvem de aura pairou no chat!* Todos que digitarem *!respirar* em 40 segundos ganham *40* de aura.', command: '!respirar', type: 'all', durationMs: 40000, effect: { type: 'aura', amount: 40 } },
-    { id: 'meteoro', chance: 0.01, message: '☄️ *Um meteoro de aura está caindo!* Primeiro a digitar *!pegar* ganha *250* de aura.', command: '!pegar', type: 'first', durationMs: 45000, effect: { type: 'aura', amount: 250 } },
-    { id: 'ilusao', chance: 0.01, message: '🪞 *Uma ilusão perigosa apareceu!* Quem digitar *!tocar* *perde* *50* de aura. Só o primeiro é afetado.', command: '!tocar', type: 'first', durationMs: 40000, effect: { type: 'aura', amount: -50 } },
-    { id: 'emanar', chance: 0.01, message: '🌟 *Uma aura poderosa está emanando no chat!* O primeiro a digitar *!emanar* canaliza *180* de aura.', command: '!emanar', type: 'first', durationMs: 55000, effect: { type: 'aura', amount: 180 } },
-    { id: 'manifestar', chance: 0.01, message: '👁️ *Uma presença quer se manifestar no grupo!* Todos que digitarem *!manifestar* nos próximos 50 segundos recebem *60* de aura.', command: '!manifestar', type: 'all', durationMs: 50000, effect: { type: 'aura', amount: 60 } },
+    { id: 'energia_rara', chance: 0.30, message: `💠 *Uma energia rara apareceu no chat!* Primeiro a digitar *${PREFIX}absorver* ganha *200* de aura.`, command: `${PREFIX}absorver`, type: 'first', durationMs: 60000, effect: { type: 'aura', amount: 200 } },
+    { id: 'fenda', chance: 0.14, message: `⚡ *Uma fenda dimensional abriu!* Todos que digitarem *${PREFIX}entrar* nos próximos 45 segundos ganham *50* de aura.`, command: `${PREFIX}entrar`, type: 'all', durationMs: 45000, effect: { type: 'aura', amount: 50 } },
+    { id: 'cristal', chance: 0.11, message: `💎 *Um cristal de aura surgiu!* O primeiro a digitar *${PREFIX}pegar* recebe *150* de aura.`, command: `${PREFIX}pegar`, type: 'first', durationMs: 50000, effect: { type: 'aura', amount: 150 } },
+    { id: 'vento', chance: 0.10, message: `🌬️ *Um vento favorável passa pelo grupo!* Primeiro a digitar *${PREFIX}aproveitar* ganha *100* de aura.`, command: `${PREFIX}aproveitar`, type: 'first', durationMs: 55000, effect: { type: 'aura', amount: 100 } },
+    { id: 'oferenda', chance: 0.08, message: `👑 *Os deuses deixaram uma oferenda!* Quem digitar *${PREFIX}aceitar* primeiro ganha *300* de aura.`, command: `${PREFIX}aceitar`, type: 'first', durationMs: 60000, effect: { type: 'aura', amount: 300 } },
+    { id: 'pocao', chance: 0.06, message: `🧪 *Uma poção brilhante apareceu!* Primeiro a digitar *${PREFIX}beber* ganha *80* de aura.`, command: `${PREFIX}beber`, type: 'first', durationMs: 40000, effect: { type: 'aura', amount: 80 } },
+    { id: 'espirito', chance: 0.05, message: `👻 *O espírito do grupo se manifesta!* Todos que digitarem *${PREFIX}invocar* em 1 minuto ganham *30* de aura.`, command: `${PREFIX}invocar`, type: 'all', durationMs: 60000, effect: { type: 'aura', amount: 30 } },
+    { id: 'armadilha', chance: 0.04, message: `🕳️ *Uma armadilha sombria está ativa!* O primeiro a digitar *${PREFIX}tocar* verá as *consequências*. Cuidado!`, command: `${PREFIX}tocar`, type: 'first', durationMs: 50000, effect: { type: 'aura', amount: -100 } },
+    { id: 'fenda_maldita', chance: 0.03, message: `💀 *Uma fenda maldita se abre!* Quem digitar *${PREFIX}entrar* primeiro *perde* *150* de aura.`, command: `${PREFIX}entrar`, type: 'first', durationMs: 45000, effect: { type: 'aura', amount: -150 } },
+    { id: 'caixa', chance: 0.03, message: `📦 *Uma caixa misteriosa apareceu!* O primeiro a digitar *${PREFIX}abrir* pode ganhar ou perder aura… (sorte ou azar!)`, command: `${PREFIX}abrir`, type: 'first', durationMs: 50000, effect: { type: 'aura_random', options: [100, 100, -80, -80, 200] } },
+    { id: 'ruina', chance: 0.02, message: `🏛️ *Ruínas antigas emanam energia!* O primeiro a digitar *${PREFIX}explorar* arrisca: *+200* ou *-100* de aura.`, command: `${PREFIX}explorar`, type: 'first', durationMs: 55000, effect: { type: 'aura_random', options: [200, -100] } },
+    { id: 'nuvem', chance: 0.02, message: `☁️ *Uma nuvem de aura pairou no chat!* Todos que digitarem *${PREFIX}respirar* em 40 segundos ganham *40* de aura.`, command: `${PREFIX}respirar`, type: 'all', durationMs: 40000, effect: { type: 'aura', amount: 40 } },
+    { id: 'meteoro', chance: 0.01, message: `☄️ *Um meteoro de aura está caindo!* Primeiro a digitar *${PREFIX}pegar* ganha *250* de aura.`, command: `${PREFIX}pegar`, type: 'first', durationMs: 45000, effect: { type: 'aura', amount: 250 } },
+    { id: 'ilusao', chance: 0.01, message: `🪞 *Uma ilusão perigosa apareceu!* Quem digitar *${PREFIX}tocar* *perde* *50* de aura. Só o primeiro é afetado.`, command: `${PREFIX}tocar`, type: 'first', durationMs: 40000, effect: { type: 'aura', amount: -50 } },
+    { id: 'emanar', chance: 0.01, message: `🌟 *Uma aura poderosa está emanando no chat!* O primeiro a digitar *${PREFIX}emanar* canaliza *180* de aura.`, command: `${PREFIX}emanar`, type: 'first', durationMs: 55000, effect: { type: 'aura', amount: 180 } },
+    { id: 'manifestar', chance: 0.01, message: `👁️ *Uma presença quer se manifestar no grupo!* Todos que digitarem *${PREFIX}manifestar* nos próximos 50 segundos recebem *60* de aura.`, command: `${PREFIX}manifestar`, type: 'all', durationMs: 50000, effect: { type: 'aura', amount: 60 } },
 ];
 
 function getRandomEvent() {
@@ -657,13 +658,25 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         }
     }
 
-    if (textMessage.toLowerCase().trim() === '!mog aceitar') {
+    const mogCommand = `${PREFIX}mog`;
+    const mognowCommand = `${PREFIX}mognow`;
+    const meditarCommand = `${PREFIX}meditar`;
+    const treinarCommand = `${PREFIX}treinar`;
+    const dominarCommand = `${PREFIX}dominar`;
+    const ritualCommand = `${PREFIX}ritual`;
+    const respeitoCommand = `${PREFIX}respeito`;
+    const elogiarCommand = `${PREFIX}elogiar`;
+    const provocarCommand = `${PREFIX}provocar`;
+    const elogiadosCommand = `${PREFIX}elogiados`;
+    const auraCommandLower = `${PREFIX}aura`.toLowerCase();
+
+    if (textMessage.toLowerCase().trim() === `${mogCommand} aceitar`) {
         const list = auraSystem.getPendingMogList(chatId);
         const senderKey = getCanonicalUserKey(sender) || sender;
         const senderNum = getUserIdNumber(sender);
         const idx = list.findIndex(p => p.toKey === senderKey || getUserIdNumber(p.toKey) === senderNum || getUserIdNumber(p.toJid) === senderNum);
         if (idx === -1) {
-            await sock.sendMessage(chatId, { text: '⚠️ Não há desafio de duelo para você aceitar aqui, ou só o usuário *marcado* no !mog pode aceitar.' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Não há desafio de duelo para você aceitar aqui, ou só o usuário *marcado* no ${mogCommand} pode aceitar.` }, { quoted: msg });
             return;
         }
         const pending = list[idx];
@@ -686,10 +699,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!mog ')) {
+    if (textMessage.toLowerCase().startsWith(`${mogCommand.toLowerCase()} `)) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!mog* marcando alguém: *!mog @usuario*' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${mogCommand}* marcando alguém: *${mogCommand} @usuario*` }, { quoted: msg });
             return;
         }
         const fromKey = getCanonicalUserKey(sender) || sender;
@@ -700,17 +713,17 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         }
         auraSystem.addPendingMog(chatId, { fromKey, toKey, toJid: mentionedJid });
         const mentionInfo = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
-        await sock.sendMessage(chatId, {
-            text: `⚔️ Desafio de duelo! ${mentionInfo.mentionText} pode aceitar respondendo *!mog aceitar*. Quem mandar mais mensagens em 15 segundos vence e ganha 500 de aura.`,
+            await sock.sendMessage(chatId, {
+            text: `⚔️ Desafio de duelo! ${mentionInfo.mentionText} pode aceitar respondendo *${mogCommand} aceitar*. Quem mandar mais mensagens em 15 segundos vence e ganha 500 de aura.`,
             mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
         }, { quoted: msg });
         return;
     }
 
-    if (textMessage.toLowerCase().trim().startsWith('!mognow')) {
+    if (textMessage.toLowerCase().trim().startsWith(mognowCommand.toLowerCase())) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!mognow* marcando alguém: *!mognow @usuario*' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${mognowCommand}* marcando alguém: *${mognowCommand} @usuario*` }, { quoted: msg });
             return;
         }
         if (mognowActive.has(chatId)) {
@@ -773,7 +786,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().trim() === '!meditar') {
+    if (textMessage.toLowerCase().trim() === meditarCommand.toLowerCase()) {
         const options = [0, 10, 20, 30, 40, 50];
         const gained = options[Math.floor(Math.random() * options.length)];
         auraSystem.addAuraPoints(senderAuraKey, gained);
@@ -784,7 +797,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().trim() === '!treinar') {
+    if (textMessage.toLowerCase().trim() === treinarCommand.toLowerCase()) {
         const TREINAR_COOLDOWN_MS = 60 * 60 * 1000;
         const lastAt = auraSystem.getCooldown(senderAuraKey, 'lastTreinarAt');
         const now = Date.now();
@@ -810,7 +823,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().trim() === '!dominar') {
+    if (textMessage.toLowerCase().trim() === dominarCommand.toLowerCase()) {
         const DOMINAR_COOLDOWN_MS = 12 * 60 * 60 * 1000;
         const lastAt = auraSystem.getCooldown(senderAuraKey, 'lastDominarAt');
         const now = Date.now();
@@ -831,7 +844,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().trim() === '!ritual') {
+    if (textMessage.toLowerCase().trim() === ritualCommand.toLowerCase()) {
         const today = auraSystem.getTodayDateString();
         const lastDate = auraSystem.getCooldown(senderAuraKey, 'lastRitualDate');
         if (lastDate === today) {
@@ -870,10 +883,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!respeito ')) {
+    if (textMessage.toLowerCase().startsWith(`${respeitoCommand.toLowerCase()} `)) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!respeito* marcando alguém: *!respeito @usuario*' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${respeitoCommand}* marcando alguém: *${respeitoCommand} @usuario*` }, { quoted: msg });
             return;
         }
         const targetAuraKey = getAuraKey(mentionedJid);
@@ -884,7 +897,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         auraSystem.getUserAura(targetAuraKey);
         const result = auraSystem.transferAura(senderAuraKey, targetAuraKey, 50);
         if (!result.ok) {
-            await sock.sendMessage(chatId, { text: '❌ Você precisa de pelo menos *50* de aura para usar !respeito.' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *50* de aura para usar ${respeitoCommand}.` }, { quoted: msg });
             return;
         }
         await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
@@ -896,10 +909,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!elogiar ')) {
+    if (textMessage.toLowerCase().startsWith(`${elogiarCommand.toLowerCase()} `)) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!elogiar* marcando alguém: *!elogiar @usuario*' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${elogiarCommand}* marcando alguém: *${elogiarCommand} @usuario*` }, { quoted: msg });
             return;
         }
         const targetAuraKey = getAuraKey(mentionedJid);
@@ -922,10 +935,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!provocar ')) {
+    if (textMessage.toLowerCase().startsWith(`${provocarCommand.toLowerCase()} `)) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!provocar* marcando alguém: *!provocar @usuario*' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${provocarCommand}* marcando alguém: *${provocarCommand} @usuario*` }, { quoted: msg });
             return;
         }
         if (getCanonicalUserKey(sender) === getCanonicalUserKey(mentionedJid) || getUserIdNumber(sender) === getUserIdNumber(mentionedJid)) {
@@ -944,11 +957,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().trim() === '!elogiados me' || textMessage.toLowerCase().trim().startsWith('!elogiados me ')) {
+    if (textMessage.toLowerCase().trim() === `${elogiadosCommand.toLowerCase()} me` || textMessage.toLowerCase().trim().startsWith(`${elogiadosCommand.toLowerCase()} me `)) {
         const list = getWhoPraised(senderAuraKey);
         const uniqueJids = [...new Set(list)];
         if (uniqueJids.length === 0) {
-            await sock.sendMessage(chatId, { text: '📋 Ninguém te elogiou ainda. Use *!elogiar @alguém* para elogiar e dar +100 de aura!' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `📋 Ninguém te elogiou ainda. Use *${elogiarCommand} @alguém* para elogiar e dar +100 de aura!` }, { quoted: msg });
             return;
         }
         const jids = uniqueJids.map(k => (k.includes('@') ? k : getJidFromNumber(k)));
@@ -965,10 +978,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
         return;
     }
-    if (textMessage.toLowerCase().startsWith('!elogiados ')) {
+    if (textMessage.toLowerCase().startsWith(`${elogiadosCommand.toLowerCase()} `)) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *!elogiados me* ou *!elogiados @usuario* para ver quem elogiou.' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${elogiadosCommand} me* ou *${elogiadosCommand} @usuario* para ver quem elogiou.` }, { quoted: msg });
             return;
         }
         const targetAuraKey = getAuraKey(mentionedJid);
@@ -997,10 +1010,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!aura farmar ') || textMessage.toLowerCase().startsWith('#aura farmar ')) {
+    if (textMessage.toLowerCase().startsWith(`${auraCommandLower} farmar `)) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *#aura farmar* marcando alguém: *#aura farmar @usuario*' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${PREFIX}aura farmar* marcando alguém: *${PREFIX}aura farmar @usuario*` }, { quoted: msg });
             return;
         }
         const targetAuraKey = getAuraKey(mentionedJid);
@@ -1056,11 +1069,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!aura figurinha') || textMessage.toLowerCase().startsWith('#aura figurinha')) {
+    if (textMessage.toLowerCase().startsWith(`${auraCommandLower} figurinha`)) {
         const stickerMsg = auraSystem.getStickerFromMessage(msg);
         if (!stickerMsg) {
             await sock.sendMessage(chatId, {
-                text: '⚠️ Envie *#aura figurinha* junto com uma figurinha ou respondendo a uma figurinha.'
+                text: `⚠️ Envie *${PREFIX}aura figurinha* junto com uma figurinha ou respondendo a uma figurinha.`
             }, { quoted: msg });
             return;
         }
@@ -1089,14 +1102,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().startsWith('!aura personagem') || textMessage.toLowerCase().startsWith('#aura personagem')) {
+    if (textMessage.toLowerCase().startsWith(`${auraCommandLower} personagem`)) {
         const match =
-            textMessage.match(/[!#]aura\s+personagem\s+"([^"]+)"/i) ||
-            textMessage.match(/[!#]aura\s+personagem\s+(.+)/i);
+            textMessage.match(new RegExp(`${PREFIX}aura\\s+personagem\\s+"([^"]+)"`, 'i')) ||
+            textMessage.match(new RegExp(`${PREFIX}aura\\s+personagem\\s+(.+)`, 'i'));
         const character = match ? (match[1] || '').trim() : '';
         if (!character) {
             await sock.sendMessage(chatId, {
-                text: '⚠️ Uso: *#aura personagem "nome do personagem"*'
+                text: `⚠️ Uso: *${PREFIX}aura personagem "nome do personagem"*`
             }, { quoted: msg });
             return;
         }
@@ -1107,10 +1120,9 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
 
     const trimmedAura = textMessage.trim();
     if (
-        /^!aura missoes\s*$/i.test(trimmedAura) ||
-        /^!aura missões\s*$/i.test(trimmedAura) ||
-        /^#aura missoes\s*$/i.test(trimmedAura) ||
-        /^#aura missões\s*$/i.test(trimmedAura)
+        new RegExp(`^${PREFIX}aura\\s+missoes\\s*$`, 'i').test(trimmedAura) ||
+        new RegExp(`^${PREFIX}aura\\s+missões\\s*$`, 'i').test(trimmedAura) ||
+        false
     ) {
         const user = auraSystem.getUserAura(senderAuraKey);
         const drawn = user.dailyMissions?.drawnMissions || [];
@@ -1125,7 +1137,17 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const done = completed.includes(id);
             const target = cfg?.target ?? 1;
             const reward = cfg?.reward ?? 0;
-            text += `${done ? '✅' : '⬜'} *${cfg?.label || id}*\n`;
+
+            let label = cfg?.label || id;
+            if (id === 'duel_win') {
+                label += ` (${mogCommand})`;
+            } else if (id === 'survive_attack') {
+                label += ` (${mognowCommand})`;
+            } else if (id === 'help_someone') {
+                label += ` (${respeitoCommand} @usuario)`;
+            }
+
+            text += `${done ? '✅' : '⬜'} *${label}*\n`;
             text += `   ${done ? 'Concluída' : `${val}/${target}`} → *+${reward}* aura\n\n`;
         });
         await sock.sendMessage(chatId, { text }, { quoted: msg });
@@ -1133,10 +1155,9 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (
-        /^!aura\s+ranking\s*$/i.test(textMessage.trim()) ||
-        /^!aura\s+rank\s*$/i.test(textMessage.trim()) ||
-        /^#aura\s+ranking\s*$/i.test(textMessage.trim()) ||
-        /^#aura\s+rank\s*$/i.test(textMessage.trim())
+        new RegExp(`^${PREFIX}aura\\s+ranking\\s*$`, 'i').test(textMessage.trim()) ||
+        new RegExp(`^${PREFIX}aura\\s+rank\\s*$`, 'i').test(textMessage.trim()) ||
+        false
     ) {
         const ranking = auraSystem.getAuraRanking(10);
         if (ranking.length === 0) {
@@ -1165,12 +1186,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
-    if (textMessage.toLowerCase().trim().startsWith('!aura info') || textMessage.toLowerCase().trim().startsWith('#aura info')) {
+    if (textMessage.toLowerCase().trim().startsWith(`${auraCommandLower} info`)) {
         const trimmed = textMessage.trim();
-        const isMe = /^[!#]aura\s+info\s+me\s*$/i.test(trimmed);
+        const isMe = new RegExp(`^[!#]?${PREFIX}aura\\s+info\\s+me\\s*$`, 'i').test(trimmed);
         const mentionedJid = getMentionedJid(msg);
         if (!isMe && !mentionedJid) {
-            await sock.sendMessage(chatId, { text: '⚠️ Use *#aura info me* para suas informações ou *#aura info @usuario* para ver de alguém.' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `⚠️ Use *${PREFIX}aura info me* para suas informações ou *${PREFIX}aura info @usuario* para ver de alguém.` }, { quoted: msg });
             return;
         }
         const targetKey = isMe ? senderAuraKey : getAuraKey(mentionedJid);
@@ -1198,7 +1219,17 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const key = id === 'messages_500' ? 'messages' : id === 'reactions_500' ? 'reactions' : id === 'duel_win' ? 'duelWin' : id === 'survive_attack' ? 'surviveAttack' : id === 'send_media' ? 'media' : 'helpSomeone';
             const val = progress?.[key] ?? 0;
             const done = completed.includes(id);
-            text += `${done ? '✅' : '⬜'} ${cfg?.label || id}: ${done ? 'concluída' : `${val}/${cfg?.target ?? 1}`}\n`;
+
+            let label = cfg?.label || id;
+            if (id === 'duel_win') {
+                label += ` (${mogCommand})`;
+            } else if (id === 'survive_attack') {
+                label += ` (${mognowCommand})`;
+            } else if (id === 'help_someone') {
+                label += ` (${respeitoCommand} @usuario)`;
+            }
+
+            text += `${done ? '✅' : '⬜'} ${label}: ${done ? 'concluída' : `${val}/${cfg?.target ?? 1}`}\n`;
         });
         await sock.sendMessage(chatId, {
             text,
@@ -1209,9 +1240,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
 
     const lowerAura = textMessage.toLowerCase();
     if (
-        lowerAura === '!aura' ||
-        lowerAura === '#aura' ||
-        ((lowerAura.startsWith('!aura ') || lowerAura.startsWith('#aura ')) &&
+        lowerAura === auraCommandLower ||
+        (lowerAura.startsWith(`${auraCommandLower} `) &&
             !lowerAura.includes('figurinha') &&
             !lowerAura.includes('personagem') &&
             !lowerAura.includes('missoes') &&
@@ -1227,34 +1257,34 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         text += `📈 *Níveis (títulos):*\n`;
         text += `0 = NPC · 500 = Presença · 2.000 = Dominante · 5.000 = Sigma · 10.000 = Entidade · 50.000 = Deus do chat\n\n`;
         text += `—— *COMANDOS DE AÇÃO* ——\n`;
-        text += `• *!meditar* — Chance de ganhar 0, 10, 20, 30, 40 ou 50 aura (sem cooldown)\n`;
-        text += `• *!treinar* — 50% +500 aura, 50% -1000 aura. Cooldown: 1 hora\n`;
-        text += `• *!dominar* — 50% +1000 aura, 50% nada. Cooldown: 12 horas\n`;
-        text += `• *!ritual* — 50% +5000 ou 50% -5000 aura. Uma vez por dia\n`;
-        text += `• *!respeito @usuario* — Transfere 50 de sua aura para a pessoa (precisa de 50+ aura)\n`;
-        text += `• *!elogiar @usuario* — Dá +100 aura ao elogiado (sem tirar de você)\n`;
-        text += `• *!provocar @usuario* — Mensagem de provocação\n`;
-        text += `• *!elogiados me* — Lista quem te elogiou\n`;
-        text += `• *!elogiados @usuario* — Lista quem elogiou a pessoa\n\n`;
+        text += `• *${meditarCommand}* — Chance de ganhar 0, 10, 20, 30, 40 ou 50 aura (sem cooldown)\n`;
+        text += `• *${treinarCommand}* — 50% +500 aura, 50% -1000 aura. Cooldown: 1 hora\n`;
+        text += `• *${dominarCommand}* — 50% +1000 aura, 50% nada. Cooldown: 12 horas\n`;
+        text += `• *${ritualCommand}* — 50% +5000 ou 50% -5000 aura. Uma vez por dia\n`;
+        text += `• *${respeitoCommand} @usuario* — Transfere 50 de sua aura para a pessoa (precisa de 50+ aura)\n`;
+        text += `• *${elogiarCommand} @usuario* — Dá +100 aura ao elogiado (sem tirar de você)\n`;
+        text += `• *${provocarCommand} @usuario* — Mensagem de provocação\n`;
+        text += `• *${elogiadosCommand} me* — Lista quem te elogiou\n`;
+        text += `• *${elogiadosCommand} @usuario* — Lista quem elogiou a pessoa\n\n`;
         text += `—— *DUELOS E ATAQUES* ——\n`;
-        text += `• *!mog @usuario* — Desafia para duelo. O desafiado usa *!mog aceitar*. Em 15s quem mandar mais mensagens vence e ganha 500 aura\n`;
-        text += `• *!mognow @usuario* — Ataca alguém. Em 15s: se o alvo mandar mais mensagens, ganha 500 aura; se o atacante ganhar, recebe 5 aura\n`;
-        text += `• *#aura farmar @usuario* — 50% você tira 100 do alvo e ganha 100; 50% você perde 200 aura\n\n`;
-        text += `—— *COMANDOS #aura* ——\n`;
-        text += `• *#aura* — Este guia (tudo sobre aura)\n`;
-        text += `• *#aura info me* — Suas informações (aura, nível, personagem, missões)\n`;
-        text += `• *#aura info @usuario* — Informações de aura de outra pessoa\n`;
-        text += `• *#aura figurinha* — Definir figurinha de aura (com figurinha anexada). Usar essa figurinha dá 50% de +100 aura\n`;
-        text += `• *#aura personagem "nome"* — Definir seu personagem\n`;
-        text += `• *#aura missoes* — Ver suas 3 missões do dia (reset 00:00)\n`;
-        text += `• *#aura ranking* — Top 10 global por aura\n\n`;
+        text += `• *${mogCommand} @usuario* — Desafia para duelo. O desafiado usa *${mogCommand} aceitar*. Em 15s quem mandar mais mensagens vence e ganha 500 aura\n`;
+        text += `• *${mognowCommand} @usuario* — Ataca alguém. Em 15s: se o alvo mandar mais mensagens, ganha 500 aura; se o atacante ganhar, recebe 5 aura\n`;
+        text += `• *${PREFIX}aura farmar @usuario* — 50% você tira 100 do alvo e ganha 100; 50% você perde 200 aura\n\n`;
+        text += `—— *COMANDOS DE AURA* ——\n`;
+        text += `• *${PREFIX}aura* — Este guia (tudo sobre aura)\n`;
+        text += `• *${PREFIX}aura info me* — Suas informações (aura, nível, personagem, missões)\n`;
+        text += `• *${PREFIX}aura info @usuario* — Informações de aura de outra pessoa\n`;
+        text += `• *${PREFIX}aura figurinha* — Definir figurinha de aura (com figurinha anexada). Usar essa figurinha dá 50% de +100 aura\n`;
+        text += `• *${PREFIX}aura personagem "nome"* — Definir seu personagem\n`;
+        text += `• *${PREFIX}aura missoes* — Ver suas 3 missões do dia (reset 00:00)\n`;
+        text += `• *${PREFIX}aura ranking* — Top 10 global por aura\n\n`;
         text += `—— *EVENTOS ALEATÓRIOS* ——\n`;
         text += `O bot *dropa eventos* do nada no grupo. Quando aparecer uma mensagem de evento, digite o *comando indicado* no tempo limite para ganhar (ou às vezes perder) aura.\n`;
         text += `Comandos que podem aparecer nos eventos: ${eventCommands}\n`;
         text += `Alguns eventos: primeiro a digitar ganha; outros: todos que digitarem no tempo ganham. Alguns dão aura negativa — cuidado!\n\n`;
         text += `—— *MISSÕES DIÁRIAS* ——\n`;
-        text += `Todo dia você recebe 3 missões entre: Mande 50 mensagens, Reaja 20x com 💀/☠️, Vença 1 duelo (!mog), Sobreviva a um ataque (!mognow), Envie mídia, Ajude alguém (!respeito). Concluir dá bônus de aura. Reset às 00:00.\n\n`;
-        text += `_Use *#aura info me* para ver seu perfil completo._`;
+        text += `Todo dia você recebe 3 missões entre: Mande 50 mensagens, Reaja 20x com 💀/☠️, Vença 1 duelo (${mogCommand}), Sobreviva a um ataque (${mognowCommand}), Envie mídia, Ajude alguém (${respeitoCommand}). Concluir dá bônus de aura. Reset às 00:00.\n\n`;
+        text += `_Use *${PREFIX}aura info me* para ver seu perfil completo._`;
         await sock.sendMessage(chatId, { text }, { quoted: msg });
         return;
     }

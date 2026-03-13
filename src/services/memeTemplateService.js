@@ -1,13 +1,13 @@
 const path = require('path');
 const sharp = require('sharp');
-const { PREFIX, PREFIX_REGEX } = require('../config/prefix');
+const { PREFIX } = require('../config/prefix');
 
 // Configuração estática dos templates de meme
 // Para adicionar novos templates, basta incluir novos objetos neste array.
 const TEMPLATE_DEFINITIONS = [
   {
     id: 'kratos',
-    command: 'kratos',
+    command: `${PREFIX}kratos`,
     basePath: path.join(
       __dirname,
       '..',
@@ -191,13 +191,8 @@ async function getTemplate(templateId) {
 }
 
 function getTemplateByCommand(commandText) {
-  const text = (commandText || '').trim().toLowerCase();
-  const def = TEMPLATE_DEFINITIONS.find((t) => {
-    const base = t.command.toLowerCase();
-    return (
-      text.startsWith(PREFIX.toLowerCase() + base)
-    );
-  });
+  const text = (commandText || '').trim();
+  const def = TEMPLATE_DEFINITIONS.find((t) => text.startsWith(t.command));
   return def ? def.id : null;
 }
 
