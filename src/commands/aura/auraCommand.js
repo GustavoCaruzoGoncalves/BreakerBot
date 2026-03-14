@@ -997,6 +997,39 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         return;
     }
 
+    if (textMessage.toLowerCase().startsWith('!aura doar ')) {
+        const mentionedJid = getMentionedJid(msg);
+        if (!mentionedJid) {
+            await sock.sendMessage(chatId, { text: '⚠️ Use *!aura doar valor @usuario* — a pessoa deve ser marcada. Ex: *!aura doar 100 @usuario*' }, { quoted: msg });
+            return;
+        }
+        const match = textMessage.match(/!aura\s+doar\s+(\d+)/i);
+        const amount = match ? parseInt(match[1], 10) : 0;
+        if (!amount || amount < 1) {
+            await sock.sendMessage(chatId, { text: '⚠️ Informe um valor válido (número inteiro maior que 0). Ex: *!aura doar 100 @usuario*' }, { quoted: msg });
+            return;
+        }
+        const targetAuraKey = getAuraKey(mentionedJid);
+        if (!targetAuraKey || targetAuraKey === senderAuraKey) {
+            await sock.sendMessage(chatId, { text: '⚠️ Você não pode doar aura para si mesmo.' }, { quoted: msg });
+            return;
+        }
+        auraSystem.getUserAura(targetAuraKey);
+        const result = auraSystem.transferAura(senderAuraKey, targetAuraKey, amount);
+        if (!result.ok) {
+            const current = auraSystem.getUserAura(senderAuraKey).auraPoints;
+            await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *${amount}* de aura para doar. Seu saldo: *${current}*` }, { quoted: msg });
+            return;
+        }
+        const targetMention = mentionsController.processSingleMention(getJidForMention(targetAuraKey), contactsCache);
+        await sock.sendMessage(chatId, {
+            text: `💫 Você doou *${amount}* de aura para ${targetMention.mentionText}. Seu saldo: *${result.fromRemaining}*`,
+            mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
+        }, { quoted: msg });
+        await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
+        return;
+    }
+
     if (textMessage.toLowerCase().startsWith('!aura farmar ')) {
         const mentionedJid = getMentionedJid(msg);
         if (!mentionedJid) {
@@ -1196,7 +1229,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     const lowerAura = textMessage.toLowerCase();
-    if (lowerAura === '!aura' || (lowerAura.startsWith('!aura ') && !lowerAura.includes('figurinha') && !lowerAura.includes('personagem') && !lowerAura.includes('missoes') && !lowerAura.includes('missões') && !lowerAura.includes('farmar') && !lowerAura.includes('ranking') && !lowerAura.includes('rank') && !lowerAura.includes('info'))) {
+    if (lowerAura === '!aura' || (lowerAura.startsWith('!aura ') && !lowerAura.includes('figurinha') && !lowerAura.includes('personagem') && !lowerAura.includes('missoes') && !lowerAura.includes('missões') && !lowerAura.includes('farmar') && !lowerAura.includes('doar') && !lowerAura.includes('ranking') && !lowerAura.includes('rank') && !lowerAura.includes('info'))) {
         const eventCommands = [...new Set(RANDOM_EVENTS.map(e => e.command))].sort().join(', ');
         let text = `✨ *SISTEMA DE AURA — GUIA COMPLETO* ✨\n\n`;
         text += `📌 *O que é:* Aura é a moeda/status do bot. Você ganha ou perde aura com comandos, missões e eventos. Seu *nível* (NPC, Presença, Dominante, Sigma, Entidade, Deus do chat) depende dos pontos.\n\n`;
@@ -1222,6 +1255,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         text += `• *!aura info @usuario* — Informações de aura de outra pessoa\n`;
         text += `• *!aura figurinha* — Definir figurinha de aura (com figurinha anexada). Usar essa figurinha dá 50% de +100 aura\n`;
         text += `• *!aura personagem "nome"* — Definir seu personagem\n`;
+        text += `• *!aura doar valor @usuario* — Doa aura para alguém (obrigatório marcar a pessoa). Ex: *!aura doar 100 @usuario*\n`;
         text += `• *!aura missoes* — Ver suas 3 missões do dia (reset 00:00)\n`;
         text += `• *!aura ranking* — Top 10 global por aura\n\n`;
         text += `—— *EVENTOS ALEATÓRIOS* ——\n`;
