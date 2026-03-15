@@ -517,19 +517,11 @@ class AuraSystem {
     }
 
     async getAuraRanking(limit = 10) {
-        const usersData = await readUsersDataForAura();
-        const entries = [];
-        for (const [userId, userData] of Object.entries(usersData)) {
-            if (typeof userId !== 'string' || !userId.includes('@') || !userData?.aura) continue;
-            const auraPoints = userData.aura.auraPoints ?? 0;
-            entries.push({
-                userId,
-                auraPoints,
-                tierName: getAuraTier(auraPoints).name
-            });
-        }
-        entries.sort((a, b) => b.auraPoints - a.auraPoints);
-        return entries.slice(0, limit);
+        const rows = await repo.getAuraRanking(limit);
+        return rows.map(row => ({
+            ...row,
+            tierName: getAuraTier(row.auraPoints).name
+        }));
     }
 }
 
@@ -1185,7 +1177,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const mentions = [];
         for (let i = 0; i < ranking.length; i++) {
             const r = ranking[i];
-            const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(r.userId), contactsCache);
+            const jidForMention = (r.jid && r.jid.endsWith('@lid')) ? r.userId : (r.jid || r.userId);
+            const mentionInfo = await mentionsController.processSingleMention(jidForMention, contactsCache);
             mentionTexts.push(mentionInfo.mentionText);
             if (mentionInfo.mentions && mentionInfo.mentions.length) mentions.push(...mentionInfo.mentions);
         }

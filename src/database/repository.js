@@ -178,6 +178,47 @@ async function getAllUsers() {
     return result;
 }
 
+/**
+ * Ranking de nível: prestige DESC, level DESC, xp DESC. Exclui grupos (g.us).
+ */
+async function getLevelRanking(limit = 10) {
+    const r = await query(
+        `SELECT u.user_id AS "userId", u.xp, u.level, u.prestige, u.jid
+         FROM users u
+         WHERE u.user_id NOT LIKE '%@g.us'
+         ORDER BY u.prestige DESC, u.level DESC, u.xp DESC
+         LIMIT $1`,
+        [limit]
+    );
+    return r.rows.map(row => ({
+        userId: row.userId,
+        xp: row.xp ?? 0,
+        level: row.level ?? 1,
+        prestige: row.prestige ?? 0,
+        jid: row.jid ?? row.userId
+    }));
+}
+
+/**
+ * Ranking de aura: aura_points DESC. Exclui grupos (g.us).
+ */
+async function getAuraRanking(limit = 10) {
+    const r = await query(
+        `SELECT u.user_id AS "userId", COALESCE(a.aura_points, 0) AS "auraPoints", u.jid
+         FROM users u
+         LEFT JOIN aura a ON a.user_id = u.user_id
+         WHERE u.user_id NOT LIKE '%@g.us'
+         ORDER BY COALESCE(a.aura_points, 0) DESC
+         LIMIT $1`,
+        [limit]
+    );
+    return r.rows.map(row => ({
+        userId: row.userId,
+        auraPoints: Number(row.auraPoints) ?? 0,
+        jid: row.jid ?? row.userId
+    }));
+}
+
 async function getUserById(userId) {
     const userResult = await query('SELECT * FROM users WHERE user_id = $1', [userId]);
     const row = userResult.rows[0];
@@ -815,6 +856,8 @@ async function getAuraGlobal() {
 module.exports = {
     getAllUsers,
     getUserById,
+    getLevelRanking,
+    getAuraRanking,
     createUser,
     updateUser,
     patchUser,

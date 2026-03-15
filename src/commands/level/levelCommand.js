@@ -695,28 +695,10 @@ class LevelSystem {
     }
 
     async getRanking(limit = 10) {
-        const usersData = await this.readUsersData();
-        const userEntries = Object.entries(usersData).filter(([k]) => typeof k === 'string' && k.includes('@'));
-        console.log(`[DEBUG] Calculando ranking com ${userEntries.length} usuários`);
-        const sortedUsers = userEntries
-            .sort(([,a], [,b]) => {
-                if (a.prestige !== b.prestige) return b.prestige - a.prestige;
-                if (a.level !== b.level) return b.level - a.level;
-                return b.xp - a.xp;
-            })
-            .slice(0, limit);
-        
-        console.log(`[DEBUG] Top 3 do ranking:`, sortedUsers.slice(0, 3).map(([userId, data]) => ({
-            userId: userId.split('@')[0],
-            level: data.level,
-            xp: data.xp,
-            prestige: data.prestige
-        })));
-        
-        return sortedUsers.map(([userId, data]) => ({
-            userId,
-            ...data,
-            rank: this.getUserRank(data.level)
+        const rows = await repo.getLevelRanking(limit);
+        return rows.map(row => ({
+            ...row,
+            rank: this.getUserRank(row.level)
         }));
     }
 
@@ -1016,7 +998,7 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         
         for (let i = 0; i < ranking.length; i++) {
             const user = ranking[i];
-            const userJidForMention = user.jid || user.userId;
+            const userJidForMention = (user.jid && user.jid.endsWith('@lid')) ? user.userId : (user.jid || user.userId);
             const mentionInfo = await mentionsController.processSingleMention(userJidForMention, contactsCache);
             mentionTexts.push(mentionInfo.mentionText);
             if (mentionInfo.mentions.length > 0) {

@@ -950,21 +950,18 @@ app.patch('/api/amigo-secreto/:groupId/presente', async (req, res) => {
 app.get('/api/aura/ranking', async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit, 10) || 10, 100);
+        const rows = await repo.getAuraRanking(limit);
         const users = await repo.getAllUsers();
-        const entries = [];
-        for (const [userId, data] of Object.entries(users)) {
-            if (!isUserKey(userId) || !data?.aura) continue;
-            const auraPoints = data.aura.auraPoints ?? 0;
-            entries.push({
-                userId,
-                auraPoints,
-                tierName: getAuraTier(auraPoints).name,
-                displayName: data.customNameEnabled && data.customName ? data.customName : (data.pushName || userId.split('@')[0]),
-                character: data.aura.character ?? null
-            });
-        }
-        entries.sort((a, b) => b.auraPoints - a.auraPoints);
-        const ranking = entries.slice(0, limit);
+        const ranking = rows.map(row => {
+            const data = users[row.userId];
+            return {
+                userId: row.userId,
+                auraPoints: row.auraPoints,
+                tierName: getAuraTier(row.auraPoints).name,
+                displayName: data && (data.customNameEnabled && data.customName ? data.customName : (data.pushName || row.userId.split('@')[0])) || row.userId.split('@')[0],
+                character: data?.aura?.character ?? null
+            };
+        });
         res.json({
             success: true,
             limit,
