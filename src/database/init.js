@@ -77,7 +77,9 @@ async function runSchema(client) {
     }
     if (buffer.trim()) statements.push((buffer + ';').trim());
 
-    const ignorable = ['42P07', '42710', '42501', '42701'];
+    // 42P07=duplicate_table, 42710=duplicate_object, 42501=insufficient_privilege,
+    // 42701=duplicate_column, 23505=unique_violation (ext/tabela já existe)
+    const ignorable = ['42P07', '42710', '42501', '42701', '23505'];
     for (let i = 0; i < statements.length; i++) {
         const sql = statements[i];
         try {
