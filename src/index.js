@@ -6,6 +6,8 @@ const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const path = require("path");
 
+const db = require("./database/db");
+const { initDatabase } = require("./database/init");
 const { startAuthMessageProcessor } = require("./services/authMessageSender");
 
 const imagesCommandsBot = require("./commands/media/imagesCommands");
@@ -48,6 +50,41 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 const contactsCache = {};
+
+// Fila síncrona: processa uma mensagem por vez, em ordem, para evitar race conditions
+const messageQueue = [];
+let isProcessingQueue = false;
+
+async function processMessageQueue(sock, contactsCache) {
+  if (isProcessingQueue || messageQueue.length === 0) return;
+  isProcessingQueue = true;
+  const event = messageQueue.shift();
+  try {
+    await imagesCommandsBot(sock, event);
+    await audioCommandsBot(sock, event);
+    await jokesCommandsBot(sock, event, contactsCache);
+    await featureCommandsBot(sock, event);
+    await gamesCommandsBot(sock, event, contactsCache);
+    await amigoSecretoCommandBot(sock, event, contactsCache);
+    await menuCommandBot(sock, event);
+    await gptCommandBot(sock, event);
+    await grokCommandBot(sock, event);
+    await lyricsCommandBot(sock, event);
+    await banCommandBot(sock, event);
+    await zhipuCommandsBot(sock, event);
+    await sendJsCommandBot(sock, event);
+    await levelCommandBot(sock, event, contactsCache);
+    await auraCommandBot(sock, event, contactsCache);
+  } catch (err) {
+    console.error("Erro ao processar mensagem:", err);
+    logError(err);
+  } finally {
+    isProcessingQueue = false;
+    if (messageQueue.length > 0) {
+      setImmediate(() => processMessageQueue(sock, contactsCache));
+    }
+  }
+}
 
 async function connectBot() {
   try {
@@ -132,33 +169,13 @@ async function connectBot() {
       }
     });
 
-    sock.ev.on("messages.upsert", async (messages) => {
-      try {
-        console.log("\n========== MENSAGEM RECEBIDA ==========");
-        console.log("Timestamp:", new Date().toISOString());
-        console.log("Dados completos da API do Baileys:");
-        console.log(JSON.stringify(messages, null, 2));
-        console.log("========================================\n");
-
-        await imagesCommandsBot(sock, messages);
-        await audioCommandsBot(sock, messages);
-        await jokesCommandsBot(sock, messages, contactsCache);
-        await featureCommandsBot(sock, messages);
-        await gamesCommandsBot(sock, messages);
-        await amigoSecretoCommandBot(sock, messages, contactsCache);
-        await menuCommandBot(sock, messages);
-        await gptCommandBot(sock, messages);
-        await grokCommandBot(sock, messages);
-        await lyricsCommandBot(sock, messages);
-        await banCommandBot(sock, messages);
-        await zhipuCommandsBot(sock, messages);
-        await sendJsCommandBot(sock, messages);
-        await levelCommandBot(sock, messages, contactsCache);
-        await auraCommandBot(sock, messages, contactsCache);
-      } catch (err) {
-        console.error("Erro ao processar mensagem:", err);
-        logError(err);
+    sock.ev.on("messages.upsert", (evt) => {
+      const list = evt?.messages || (Array.isArray(evt) ? evt : [evt]);
+      for (const m of list) {
+        messageQueue.push({ messages: [m] });
       }
+      console.log("[FILA] Mensagem(ns) enfileirada(s). Total na fila:", messageQueue.length);
+      processMessageQueue(sock, contactsCache);
     });
   } catch (err) {
     console.error("Erro ao iniciar o bot:", err);
@@ -167,4 +184,14 @@ async function connectBot() {
   }
 }
 
-connectBot();
+async function start() {
+  const initOk = await initDatabase();
+  if (!initOk) {
+    console.warn("[DB] Init falhou - o bot iniciará, mas funcionalidades que usam o banco podem não funcionar.");
+  } else {
+    await db.testConnection();
+  }
+  connectBot();
+}
+
+start();

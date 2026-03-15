@@ -1,9 +1,9 @@
-const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
 const { admins } = require('../../config/adm');
 const mentionsController = require('../../controllers/mentionsController');
+const repo = require('../../database/repository');
 
 async function downloadImageAsBase64(url) {
     return new Promise((resolve, reject) => {
@@ -51,7 +51,7 @@ async function updateUserProfilePicture(sock, userId, usersData, levelSystem) {
             if (user.profilePicture !== null) {
                 user.profilePicture = null;
                 user.profilePictureUpdatedAt = now.toISOString();
-                levelSystem.writeUsersData(usersData);
+                await levelSystem.writeUsersData(usersData);
             }
             return false;
         }
@@ -60,7 +60,7 @@ async function updateUserProfilePicture(sock, userId, usersData, levelSystem) {
         
         user.profilePicture = base64Image;
         user.profilePictureUpdatedAt = now.toISOString();
-        levelSystem.writeUsersData(usersData);
+        await levelSystem.writeUsersData(usersData);
         
         console.log(`[DEBUG] Foto de perfil atualizada para ${userId}`);
         return true;
@@ -83,60 +83,78 @@ const RANKS = [
     { name: "👽 Transcendente", minLevel: 201, maxLevel: 999, color: "#FF1493" }
 ];
 
+// Cache em memória + IDs processados (evita perda de mensagens e duplicatas)
+const levelCache = { users: null, dailyBonus: null };
+const processedMessageIds = new Set();
+const MAX_PROCESSED_IDS = 100000;
+const lastLevelUpSent = new Map();
+
+function getMessageId(msg) {
+    const id = msg?.key?.id;
+    if (id) return id;
+    const jid = msg?.key?.remoteJid || '';
+    const ts = msg?.messageTimestamp || Date.now();
+    const participant = msg?.key?.participant || msg?.key?.participantAlt || '';
+    return `${jid}_${participant}_${ts}`;
+}
+
 class LevelSystem {
-    constructor() {
-        this.dataPath = path.join(__dirname, '..', '..', '..', 'levels_info');
-        this.ensureDirectory();
+    constructor() {}
+
+    async getOrLoadCache() {
+        if (!levelCache.users) {
+            levelCache.users = await this.readUsersData();
+        }
+        return levelCache.users;
     }
 
-    ensureDirectory() {
-        if (!fs.existsSync(this.dataPath)) {
-            fs.mkdirSync(this.dataPath, { recursive: true });
+    async flushCache() {
+        if (levelCache.users && Object.keys(levelCache.users).length > 0) {
+            try {
+                await this.writeUsersData(levelCache.users);
+            } catch (err) {
+                console.error('[LEVEL] Erro ao flush do cache para DB:', err.message);
+                throw err;
+            }
         }
     }
 
-    readUsersData() {
+    invalidateCache() {
+        levelCache.users = null;
+    }
+
+    async readUsersData() {
         try {
-            const filePath = path.join(this.dataPath, 'users.json');
-            if (fs.existsSync(filePath)) {
-                const data = fs.readFileSync(filePath, 'utf8');
-                return JSON.parse(data);
-            }
+            return await repo.getAllUsers();
         } catch (error) {
             console.error('Erro ao ler dados dos usuários:', error);
+            return {};
         }
-        return {};
     }
 
-    writeUsersData(data) {
+    async writeUsersData(data) {
         try {
-            this.ensureDirectory();
-            const filePath = path.join(this.dataPath, 'users.json');
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+            await repo.saveAllUsers(data);
+            levelCache.users = data;
         } catch (error) {
             console.error('Erro ao salvar dados dos usuários:', error);
             throw error;
         }
     }
 
-    readDailyBonus() {
+    async readDailyBonus() {
         try {
-            const filePath = path.join(this.dataPath, 'daily_bonus.json');
-            if (fs.existsSync(filePath)) {
-                const data = fs.readFileSync(filePath, 'utf8');
-                return JSON.parse(data);
-            }
+            const db = await repo.getDailyBonus();
+            return { lastBonusDate: db.lastBonusDate, lastBonusUser: db.lastBonusUser };
         } catch (error) {
             console.error('Erro ao ler bônus diário:', error);
+            return { lastBonusDate: null, lastBonusUser: null };
         }
-        return { lastBonusDate: null, lastBonusUser: null };
     }
 
-    writeDailyBonus(data) {
+    async writeDailyBonus(data) {
         try {
-            this.ensureDirectory();
-            const filePath = path.join(this.dataPath, 'daily_bonus.json');
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+            await repo.setDailyBonus(data.lastBonusDate, data.lastBonusUser);
         } catch (error) {
             console.error('Erro ao salvar bônus diário:', error);
             throw error;
@@ -233,10 +251,10 @@ class LevelSystem {
         return level;
     }
 
-    addXP(userId, xpAmount, isDailyBonus = false, pushName = null) {
+    async addXP(userId, xpAmount, isDailyBonus = false, pushName = null) {
         console.log(`[DEBUG] addXP chamado para ${userId} com ${xpAmount} XP, bônus: ${isDailyBonus}`);
         
-        let usersData = this.readUsersData();
+        let usersData = await this.readUsersData();
         this.initUser(usersData, userId, pushName);
         const user = usersData[userId];
         
@@ -244,8 +262,8 @@ class LevelSystem {
             console.log(`[DEBUG] Bônus diário expirou, removendo multiplicador`);
             user.dailyBonusMultiplier = 0;
             user.dailyBonusExpiry = null;
-            this.writeUsersData(usersData);
-            usersData = this.readUsersData();
+            await this.writeUsersData(usersData);
+            usersData = await this.readUsersData();
         }
         
         const prestigeMultiplier = 1 + (user.prestige * 0.5);
@@ -269,7 +287,7 @@ class LevelSystem {
         
         console.log(`[DEBUG] Usuário ${userId}: ${oldLevel} -> ${newLevel}, XP: ${user.xp}`);
         
-        this.writeUsersData(usersData);
+        await this.writeUsersData(usersData);
         
         return {
             oldLevel,
@@ -282,27 +300,73 @@ class LevelSystem {
         };
     }
 
-    checkDailyBonus(userId) {
-        let usersData = this.readUsersData();
-        this.initUser(usersData, userId);
+    /** Adiciona XP ao cache em memória (não escreve no DB). Usado para processar batch de mensagens. */
+    async addXPToCache(userId, xpAmount, isDailyBonus = false, pushName = null) {
+        const usersData = await this.getOrLoadCache();
+        this.initUser(usersData, userId, pushName);
+        const user = usersData[userId];
+
+        if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < new Date()) {
+            user.dailyBonusMultiplier = 0;
+            user.dailyBonusExpiry = null;
+        }
+
+        const prestigeMultiplier = 1 + (user.prestige * 0.5);
+        const dailyBonusMultiplier = user.dailyBonusMultiplier || 0;
+        const totalMultiplier = prestigeMultiplier + dailyBonusMultiplier;
+        const finalXP = Math.floor(xpAmount * totalMultiplier);
+
+        user.xp += finalXP;
+        user.totalMessages++;
+        user.lastMessageTime = new Date().toISOString();
+
+        const oldLevel = user.level;
+        const newLevel = this.calculateLevel(user.xp);
+        user.level = newLevel;
+
+        if (newLevel > oldLevel) {
+            this.updatePrestigeAvailable(usersData, userId);
+        }
+
+        return {
+            oldLevel,
+            newLevel,
+            xpGained: finalXP,
+            isLevelUp: newLevel > oldLevel,
+            isDailyBonus,
+            totalMultiplier,
+            dailyBonusMultiplier
+        };
+    }
+
+    async checkDailyBonus(userId, pushName = null, useCache = false) {
+        let usersData = useCache ? await this.getOrLoadCache() : await this.readUsersData();
+        this.initUser(usersData, userId, pushName);
         let user = usersData[userId];
         const now = new Date();
-        const today = now.toDateString();
+        const today = now.toISOString().slice(0, 10);
         const currentHour = now.getHours();
         
-        let dailyBonus = this.readDailyBonus();
+        let dailyBonus = await this.readDailyBonus();
+        const lastDateStr = dailyBonus.lastBonusDate
+            ? (typeof dailyBonus.lastBonusDate === 'string'
+                ? dailyBonus.lastBonusDate.slice(0, 10)
+                : new Date(dailyBonus.lastBonusDate).toISOString().slice(0, 10))
+            : null;
         
         console.log(`[DEBUG] Verificando bônus diário para ${userId}`);
         console.log(`[DEBUG] Hora atual: ${currentHour}, Data: ${today}`);
-        console.log(`[DEBUG] Último bônus: ${dailyBonus.lastBonusDate}, Usuário: ${dailyBonus.lastBonusUser}`);
+        console.log(`[DEBUG] Último bônus: ${lastDateStr}, Usuário: ${dailyBonus.lastBonusUser}`);
         
         if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < now) {
             console.log(`[DEBUG] Bônus anterior expirou, removendo multiplicador`);
             user.dailyBonusMultiplier = 0;
             user.dailyBonusExpiry = null;
-            this.writeUsersData(usersData);
-            usersData = this.readUsersData();
-            user = usersData[userId];
+            if (!useCache) {
+                await this.writeUsersData(usersData);
+                usersData = await this.readUsersData();
+                user = usersData[userId];
+            }
         }
         
         if (currentHour < 6) {
@@ -310,7 +374,7 @@ class LevelSystem {
             return false;
         }
         
-        if (dailyBonus.lastBonusDate === today) {
+        if (lastDateStr === today) {
             console.log(`[DEBUG] Bônus já foi dado hoje`);
             return false;
         }
@@ -322,14 +386,14 @@ class LevelSystem {
         user.dailyBonusMultiplier = 1.0;
         user.dailyBonusExpiry = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
         
-        this.writeDailyBonus(dailyBonus);
-        this.writeUsersData(usersData);
+        await this.writeDailyBonus(dailyBonus);
+        if (!useCache) await this.writeUsersData(usersData);
         
         return true;
     }
 
-    canPrestige(userId) {
-        const usersData = this.readUsersData();
+    async canPrestige(userId) {
+        const usersData = await this.readUsersData();
         this.initUser(usersData, userId);
         const user = usersData[userId];
         
@@ -338,14 +402,14 @@ class LevelSystem {
         return user.level >= 10 && user.prestigeAvailable > 0;
     }
 
-    prestige(userId) {
-        let usersData = this.readUsersData();
+    async prestige(userId) {
+        let usersData = await this.readUsersData();
         this.initUser(usersData, userId);
         const user = usersData[userId];
         
         this.updatePrestigeAvailable(usersData, userId);
         
-        if (!this.canPrestige(userId)) {
+        if (!(await this.canPrestige(userId))) {
             if (user.level < 10) {
                 return { success: false, message: "Você precisa estar no nível 10 ou superior para fazer prestígio!" };
             } else if (user.prestigeAvailable <= 0) {
@@ -362,7 +426,7 @@ class LevelSystem {
         user.prestige++;
         user.prestigeAvailable--;
         
-        this.writeUsersData(usersData);
+        await this.writeUsersData(usersData);
         
         return {
             success: true,
@@ -373,8 +437,8 @@ class LevelSystem {
         };
     }
 
-    prestigioAll(userId) {
-        let usersData = this.readUsersData();
+    async prestigioAll(userId) {
+        let usersData = await this.readUsersData();
         this.initUser(usersData, userId);
         const user = usersData[userId];
         
@@ -403,7 +467,7 @@ class LevelSystem {
         
         user.prestigeAvailable = 0;
         
-        this.writeUsersData(usersData);
+        await this.writeUsersData(usersData);
         
         return {
             success: true,
@@ -416,8 +480,43 @@ class LevelSystem {
         };
     }
 
-    getUserInfo(userId) {
-        let usersData = this.readUsersData();
+    getUserInfoFromCache(userId) {
+        if (!levelCache.users) return null;
+        const userKey = this.findUserKey(levelCache.users, userId);
+        const actualUserId = userKey || userId;
+        this.initUser(levelCache.users, actualUserId);
+        const user = levelCache.users[actualUserId];
+        if (!user) return null;
+        const currentRank = this.getUserRank(user.level);
+        this.updatePrestigeAvailable(levelCache.users, actualUserId);
+        let totalXPNeeded = 0;
+        for (let i = 1; i < user.level; i++) {
+            totalXPNeeded += this.getRequiredXP(i);
+        }
+        const nextLevelXP = this.getRequiredXP(user.level);
+        const progressXP = user.xp - totalXPNeeded;
+        const neededXP = Math.max(0, nextLevelXP - progressXP);
+        const prestigeMultiplier = 1 + (user.prestige * 0.5);
+        const dailyBonusMultiplier = user.dailyBonusMultiplier || 0;
+        const totalMultiplier = prestigeMultiplier + dailyBonusMultiplier;
+        return {
+            ...user,
+            rank: currentRank,
+            progressXP: Math.min(progressXP, nextLevelXP),
+            neededXP,
+            nextLevelXP,
+            prestigeMultiplier,
+            dailyBonusMultiplier,
+            totalMultiplier
+        };
+    }
+
+    async getUserInfo(userId) {
+        if (levelCache.users) {
+            const cached = this.getUserInfoFromCache(userId);
+            if (cached) return cached;
+        }
+        let usersData = await this.readUsersData();
         
         const userKey = this.findUserKey(usersData, userId);
         const actualUserId = userKey || userId;
@@ -440,8 +539,8 @@ class LevelSystem {
         if (user.dailyBonusExpiry && new Date(user.dailyBonusExpiry) < new Date()) {
             user.dailyBonusMultiplier = 0;
             user.dailyBonusExpiry = null;
-            this.writeUsersData(usersData);
-            usersData = this.readUsersData();
+            await this.writeUsersData(usersData);
+            usersData = await this.readUsersData();
             user = usersData[actualUserId];
         }
         
@@ -477,8 +576,8 @@ class LevelSystem {
         user.prestigeAvailable = Math.max(0, shouldHave - used);
     }
 
-    setLevel(userId, targetLevel) {
-        let usersData = this.readUsersData();
+    async setLevel(userId, targetLevel) {
+        let usersData = await this.readUsersData();
         this.initUser(usersData, userId);
         const user = usersData[userId];
         
@@ -524,9 +623,9 @@ class LevelSystem {
         
         this.updatePrestigeAvailable(usersData, userId);
         
-        this.writeUsersData(usersData);
+        await this.writeUsersData(usersData);
         
-        this.updateRankingAfterChange(userId);
+        await this.updateRankingAfterChange(userId);
         
         return {
             success: true,
@@ -539,8 +638,8 @@ class LevelSystem {
         };
     }
 
-    resetSetLevel(userId) {
-        let usersData = this.readUsersData();
+    async resetSetLevel(userId) {
+        let usersData = await this.readUsersData();
         this.initUser(usersData, userId);
         const user = usersData[userId];
         
@@ -577,9 +676,9 @@ class LevelSystem {
             user.levelHistory.splice(lastIndex, 1);
         }
         
-        this.writeUsersData(usersData);
+        await this.writeUsersData(usersData);
         
-        this.updateRankingAfterChange(userId);
+        await this.updateRankingAfterChange(userId);
         
         return {
             success: true,
@@ -595,8 +694,8 @@ class LevelSystem {
         };
     }
 
-    getRanking(limit = 10) {
-        const usersData = this.readUsersData();
+    async getRanking(limit = 10) {
+        const usersData = await this.readUsersData();
         const userEntries = Object.entries(usersData).filter(([k]) => typeof k === 'string' && k.includes('@'));
         console.log(`[DEBUG] Calculando ranking com ${userEntries.length} usuários`);
         const sortedUsers = userEntries
@@ -621,19 +720,19 @@ class LevelSystem {
         }));
     }
 
-    updateRankingAfterChange(userId) {
-        let usersData = this.readUsersData();
+    async updateRankingAfterChange(userId) {
+        let usersData = await this.readUsersData();
         this.initUser(usersData, userId);
         const user = usersData[userId];
         
         this.updatePrestigeAvailable(usersData, userId);
         
-        this.writeUsersData(usersData);
+        await this.writeUsersData(usersData);
         
         console.log(`[DEBUG] Ranking atualizado para ${userId}: Nível ${user.level}, XP ${user.xp}, Prestígio ${user.prestige}`);
         console.log(`[DEBUG] Dados do arquivo - Total de usuários: ${Object.keys(usersData).length}`);
         
-        const testRanking = this.getRanking(3);
+        const testRanking = await this.getRanking(3);
         console.log(`[DEBUG] Teste de ranking após mudança:`, testRanking.map(u => ({
             userId: u.userId.split('@')[0],
             level: u.level,
@@ -645,140 +744,116 @@ class LevelSystem {
 
 const levelSystem = new LevelSystem();
 
-async function levelCommandBot(sock, { messages }, contactsCache = {}) {
-    const msg = messages[0];
-    if (!msg.message || !msg.key.remoteJid) return;
+async function levelCommandBot(sock, evt, contactsCache = {}) {
+    const msgList = Array.isArray(evt) ? evt : (evt?.messages || []);
+    const msg = msgList[0];
+    if (!msg?.key?.remoteJid) return;
 
     const chatId = msg.key.remoteJid;
-    
-    const isGroup = msg.key.remoteJid.endsWith('@g.us');
-    const sender = isGroup 
-        ? (msg.key.participantAlt || msg.key.participant || msg.key.remoteJid)
-        : msg.key.remoteJid;
-    
-    const messageType = Object.keys(msg.message)[0];
-    const textMessage = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-
-    if (msg.key.fromMe) return;
-
+    const isGroup = chatId.endsWith('@g.us');
     const excludedCommands = ['!menu', '!help', '!ajuda'];
-    const isExcludedCommand = excludedCommands.some(cmd => textMessage.toLowerCase().startsWith(cmd.toLowerCase()));
 
-    if (textMessage && textMessage.trim().length > 0) {
-        console.log(`[DEBUG] Processando mensagem de ${sender}: "${textMessage}"`);
-        
-        const pushName = msg.pushName || contactsCache[sender]?.notify || contactsCache[sender]?.name || null;
-        
-        const userJid = msg.key.participantAlt || msg.key.participant || sender;
-        
-        let jidToSave = null;
-        if (isGroup) {
-            jidToSave = msg.key.participant || null;
-        } else {
-            jidToSave = msg.key.remoteJidAlt || null;
+    const levelUpsByUser = new Map();
+
+    for (const m of msgList) {
+        if (!m?.message || m.key?.fromMe) continue;
+        const text = m.message.conversation || m.message.extendedTextMessage?.text || '';
+        if (!text || !text.trim()) continue;
+
+        const msgId = getMessageId(m);
+        if (processedMessageIds.has(msgId)) continue;
+        if (processedMessageIds.size >= MAX_PROCESSED_IDS) {
+            const arr = [...processedMessageIds];
+            processedMessageIds.clear();
+            arr.slice(-MAX_PROCESSED_IDS / 2).forEach(id => processedMessageIds.add(id));
         }
-        
-        const isDailyBonus = levelSystem.checkDailyBonus(userJid, pushName);
-        console.log(`[DEBUG] Bônus diário: ${isDailyBonus}`);
-        
-        const xpToGive = 10;
-        const xpResult = levelSystem.addXP(userJid, xpToGive, isDailyBonus, pushName);
-        
-        let usersData = levelSystem.readUsersData();
+        processedMessageIds.add(msgId);
+
+        const sender = isGroup ? (m.key.participantAlt || m.key.participant || chatId) : chatId;
+        const userJid = m.key.participantAlt || m.key.participant || sender;
+        const pushName = m.pushName || contactsCache[sender]?.notify || contactsCache[sender]?.name || null;
+        const jidToSave = isGroup ? (m.key.participant || null) : (m.key.remoteJidAlt || null);
+
+        const isDailyBonus = await levelSystem.checkDailyBonus(userJid, pushName, true);
+        const xpResult = await levelSystem.addXPToCache(userJid, 10, isDailyBonus, pushName);
+
+        const usersData = await levelSystem.getOrLoadCache();
         if (!usersData[userJid]) {
             usersData[userJid] = {
-                xp: 0,
-                level: 1,
-                prestige: 0,
-                prestigeAvailable: 0,
-                totalMessages: 0,
-                lastMessageTime: null,
-                badges: [],
-                lastPrestigeLevel: 0,
-                levelHistory: [],
-                dailyBonusMultiplier: 0,
-                dailyBonusExpiry: null,
-                allowMentions: false,
-                pushName: pushName || null,
-                customName: null,
-                customNameEnabled: false,
-                jid: jidToSave || userJid,
-                profilePicture: null,
-                profilePictureUpdatedAt: null
+                xp: 0, level: 1, prestige: 0, prestigeAvailable: 0, totalMessages: 0,
+                lastMessageTime: null, badges: [], lastPrestigeLevel: 0, levelHistory: [],
+                dailyBonusMultiplier: 0, dailyBonusExpiry: null, allowMentions: false,
+                pushName: pushName || null, customName: null, customNameEnabled: false,
+                jid: jidToSave || userJid, profilePicture: null, profilePictureUpdatedAt: null
             };
-            levelSystem.writeUsersData(usersData);
         } else {
-            let needsSave = false;
-            if (jidToSave && (!usersData[userJid].jid || usersData[userJid].jid !== jidToSave)) {
-                usersData[userJid].jid = jidToSave;
-                needsSave = true;
-            }
-            if (pushName && (!usersData[userJid].pushName || usersData[userJid].pushName !== pushName)) {
-                usersData[userJid].pushName = pushName;
-                needsSave = true;
-            }
-            if (needsSave) {
-                levelSystem.writeUsersData(usersData);
-            }
+            if (jidToSave && (!usersData[userJid].jid || usersData[userJid].jid !== jidToSave)) usersData[userJid].jid = jidToSave;
+            if (pushName && (!usersData[userJid].pushName || usersData[userJid].pushName !== pushName)) usersData[userJid].pushName = pushName;
         }
-        
-        usersData = levelSystem.readUsersData();
-        updateUserProfilePicture(sock, userJid, usersData, levelSystem).catch(err => {
-            console.log(`[DEBUG] Erro ao atualizar foto de perfil:`, err.message);
-        });
-        
-        console.log(`[DEBUG] Resultado XP:`, xpResult);
-        
+
         if (xpResult.isLevelUp) {
-            const userInfo = levelSystem.getUserInfo(sender);
-            const rank = userInfo.rank;
-            
-            const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
-            let levelUpMessage = `🎉 ${mentionInfo.mentionText} subiu para o nível ${xpResult.newLevel}! 🎉\n`;
-            
-            if (admins.includes(sender)) {
-                levelUpMessage += `👑 ADMINISTRADOR⭐😎\n`;
-            }
-            
-            levelUpMessage += `📊 Elo: ${rank.name}\n`;
-            levelUpMessage += `⭐ XP: ${userInfo.xp}\n`;
-            levelUpMessage += `🏆 Prestígio: ${userInfo.prestige}\n`;
-            
-            if (xpResult.isDailyBonus) {
-                levelUpMessage += `🌅 Bônus diário ativado: +1.0x multiplicador por 24h!`;
-            } else if (xpResult.dailyBonusMultiplier > 0) {
-                levelUpMessage += `🌅 Multiplicador bônus ativo: +${xpResult.dailyBonusMultiplier}x`;
-            }
-            
-            await sock.sendMessage(chatId, {
-                text: levelUpMessage,
-                mentions: mentionInfo.mentions
-            });
-            
-            if (xpResult.newLevel >= 10 && xpResult.newLevel % 10 === 0) {
-                const userInfo = levelSystem.getUserInfo(sender);
-                const mentionInfo2 = mentionsController.processSingleMention(sender, contactsCache);
-                await sock.sendMessage(chatId, {
-                    text: `🏆 ${mentionInfo2.mentionText} alcançou o nível ${xpResult.newLevel}! Você tem ${userInfo.prestigeAvailable} prestígios disponíveis! Use !prestigio para resgatar! 🏆`,
-                    mentions: mentionInfo2.mentions
-                });
-            }
-        }
-        
-        if (xpResult.isLevelUp) {
-            const userInfo = levelSystem.getUserInfo(sender);
-            const rank = userInfo.rank;
-            
-            const oldRank = levelSystem.getUserRank(xpResult.oldLevel);
-            if (oldRank.name !== rank.name) {
-                const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
-                await sock.sendMessage(chatId, {
-                    text: `🌟 ${mentionInfo.mentionText} alcançou o elo ${rank.name}! 🌟`,
-                    mentions: mentionInfo.mentions
-                });
+            const prev = levelUpsByUser.get(userJid);
+            if (!prev || xpResult.newLevel > prev.newLevel) {
+                levelUpsByUser.set(userJid, { ...xpResult, chatId, sender });
             }
         }
     }
+
+    try {
+        await levelSystem.flushCache();
+    } catch (err) {
+        console.error('[LEVEL] Falha ao salvar no banco:', err.message);
+    }
+
+    for (const [userJid, data] of levelUpsByUser) {
+        const key = `${userJid}_${data.newLevel}`;
+        if (lastLevelUpSent.get(key)) continue;
+        lastLevelUpSent.set(key, true);
+        if (lastLevelUpSent.size > 5000) {
+            const keys = [...lastLevelUpSent.keys()];
+            keys.slice(0, 2500).forEach(k => lastLevelUpSent.delete(k));
+        }
+
+        const userInfo = levelSystem.getUserInfoFromCache(userJid) || await levelSystem.getUserInfo(userJid);
+        const rank = userInfo?.rank || levelSystem.getUserRank(data.newLevel);
+        const mentionInfo = await mentionsController.processSingleMention(data.sender, contactsCache);
+
+        let levelUpMessage = `🎉 ${mentionInfo.mentionText} subiu para o nível ${data.newLevel}! 🎉\n`;
+        if (admins.includes(data.sender)) levelUpMessage += `👑 ADMINISTRADOR⭐😎\n`;
+        levelUpMessage += `📊 Elo: ${rank.name}\n`;
+        levelUpMessage += `⭐ XP: ${userInfo?.xp ?? 0}\n`;
+        levelUpMessage += `🏆 Prestígio: ${userInfo?.prestige ?? 0}\n`;
+        if (data.isDailyBonus) {
+            levelUpMessage += `🌅 Bônus diário ativado: +1.0x multiplicador por 24h!`;
+        } else if (data.dailyBonusMultiplier > 0) {
+            levelUpMessage += `🌅 Multiplicador bônus ativo: +${data.dailyBonusMultiplier}x`;
+        }
+
+        await sock.sendMessage(data.chatId, { text: levelUpMessage, mentions: mentionInfo.mentions });
+
+        if (data.newLevel >= 10 && data.newLevel % 10 === 0) {
+            const mentionInfo2 = await mentionsController.processSingleMention(data.sender, contactsCache);
+            await sock.sendMessage(data.chatId, {
+                text: `🏆 ${mentionInfo2.mentionText} alcançou o nível ${data.newLevel}! Você tem ${userInfo?.prestigeAvailable ?? 0} prestígios disponíveis! Use !prestigio para resgatar! 🏆`,
+                mentions: mentionInfo2.mentions
+            });
+        }
+
+        const oldRank = levelSystem.getUserRank(data.oldLevel);
+        if (oldRank.name !== rank.name) {
+            const mentionInfo3 = await mentionsController.processSingleMention(data.sender, contactsCache);
+            await sock.sendMessage(data.chatId, {
+                text: `🌟 ${mentionInfo3.mentionText} alcançou o elo ${rank.name}! 🌟`,
+                mentions: mentionInfo3.mentions
+            });
+        }
+    }
+
+    updateUserProfilePicture(sock, msgList[0] ? (msgList[0].key.participantAlt || msgList[0].key.participant || chatId) : null, await levelSystem.getOrLoadCache(), levelSystem).catch(() => {});
+
+    const sender = isGroup ? (msg.key.participantAlt || msg.key.participant || chatId) : chatId;
+    const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+    const isExcludedCommand = excludedCommands.some(cmd => textMessage.toLowerCase().startsWith(cmd.toLowerCase()));
 
     if (isExcludedCommand) {
         console.log(`[DEBUG] Comando excluído detectado: ${textMessage}`);
@@ -786,7 +861,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage === "!me" || textMessage.startsWith("!me ")) {
-        const userInfo = levelSystem.getUserInfo(sender);
+        const userInfo = await levelSystem.getUserInfo(sender);
         const rank = userInfo.rank;
         
         let meMessage = `👤 *Informações do Usuário*\n`;
@@ -819,7 +894,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
             meMessage += `🏅 Badges: ${userInfo.badges.join(', ')}\n`;
         }
         
-        const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(sender, contactsCache);
         await sock.sendMessage(chatId, {
             text: meMessage,
             mentions: mentionInfo.mentions
@@ -866,7 +941,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        const userInfo = levelSystem.getUserInfo(targetUserId);
+        const userInfo = await levelSystem.getUserInfo(targetUserId);
         const rank = userInfo.rank;
         
         let infoMessage = `👤 *Informações do Usuário*\n`;
@@ -889,7 +964,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
             infoMessage += `🏅 Badges: ${userInfo.badges.join(', ')}\n`;
         }
         
-        const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+        const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
         await sock.sendMessage(chatId, {
             text: infoMessage,
             mentions: mentionInfo.mentions
@@ -911,9 +986,9 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.startsWith("!prestigioAll")) {
-        const prestigeAllResult = levelSystem.prestigioAll(sender);
+        const prestigeAllResult = await levelSystem.prestigioAll(sender);
         
-        const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(sender, contactsCache);
         await sock.sendMessage(chatId, {
             text: prestigeAllResult.message,
             mentions: mentionInfo.mentions
@@ -921,9 +996,9 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage === "!prestigio" || textMessage.startsWith("!prestigio ")) {
-        const prestigeResult = levelSystem.prestige(sender);
+        const prestigeResult = await levelSystem.prestige(sender);
         
-        const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(sender, contactsCache);
         await sock.sendMessage(chatId, {
             text: prestigeResult.message,
             mentions: mentionInfo.mentions
@@ -931,7 +1006,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.startsWith("!ranking") && !textMessage.startsWith("!rankingGay")) {
-        const ranking = levelSystem.getRanking(10);
+        const ranking = await levelSystem.getRanking(10);
         
         let rankingMessage = `🏆 *Ranking Top 10* 🏆\n\n`;
         const userIds = ranking.map(user => user.userId);
@@ -942,7 +1017,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         for (let i = 0; i < ranking.length; i++) {
             const user = ranking[i];
             const userJidForMention = user.jid || user.userId;
-            const mentionInfo = mentionsController.processSingleMention(userJidForMention, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(userJidForMention, contactsCache);
             mentionTexts.push(mentionInfo.mentionText);
             if (mentionInfo.mentions.length > 0) {
                 mentions.push(...mentionInfo.mentions);
@@ -1056,11 +1131,11 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        const result = levelSystem.setLevel(targetUserId, targetLevel);
+        const result = await levelSystem.setLevel(targetUserId, targetLevel);
         
         if (result.success) {
-            const mentionInfoTarget = mentionsController.processSingleMention(targetUserId, contactsCache);
-            const mentionInfoSender = mentionsController.processSingleMention(sender, contactsCache);
+            const mentionInfoTarget = await mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfoSender = await mentionsController.processSingleMention(sender, contactsCache);
             const allMentions = [...mentionInfoTarget.mentions, ...mentionInfoSender.mentions];
             
             await sock.sendMessage(chatId, {
@@ -1116,11 +1191,11 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        const result = levelSystem.resetSetLevel(targetUserId);
+        const result = await levelSystem.resetSetLevel(targetUserId);
         
         if (result.success) {
-            const mentionInfoTarget = mentionsController.processSingleMention(targetUserId, contactsCache);
-            const mentionInfoSender = mentionsController.processSingleMention(sender, contactsCache);
+            const mentionInfoTarget = await mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfoSender = await mentionsController.processSingleMention(sender, contactsCache);
             const allMentions = [...mentionInfoTarget.mentions, ...mentionInfoSender.mentions];
             
             await sock.sendMessage(chatId, {
@@ -1163,7 +1238,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
         }
 
         try {
-            let usersData = levelSystem.readUsersData();
+            let usersData = await levelSystem.readUsersData();
             const userKey = levelSystem.findUserKey(usersData, targetUserId);
             const user = userKey ? usersData[userKey] : null;
 
@@ -1171,7 +1246,7 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
                 const base64Data = user.profilePicture.split(',')[1];
                 const imageBuffer = Buffer.from(base64Data, 'base64');
 
-                const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
                 await sock.sendMessage(chatId, {
                     image: imageBuffer,
                     caption: `📸 Foto de perfil de ${mentionInfo.mentionText}\n\n✅ Carregada do cache\n🕐 Última atualização: ${user.profilePictureUpdatedAt ? new Date(user.profilePictureUpdatedAt).toLocaleString('pt-BR') : 'N/A'}`,
@@ -1196,10 +1271,10 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
             if (userKey) {
                 usersData[userKey].profilePicture = base64Image;
                 usersData[userKey].profilePictureUpdatedAt = new Date().toISOString();
-                levelSystem.writeUsersData(usersData);
+                await levelSystem.writeUsersData(usersData);
             }
 
-            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
             await sock.sendMessage(chatId, {
                 image: imageBuffer,
                 caption: `📸 Foto de perfil de ${mentionInfo.mentionText}\n\n🔄 Buscada do WhatsApp`,
@@ -1217,3 +1292,4 @@ async function levelCommandBot(sock, { messages }, contactsCache = {}) {
 }
 
 module.exports = levelCommandBot;
+module.exports.levelSystem = levelSystem;

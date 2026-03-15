@@ -1,34 +1,8 @@
-const fs = require('fs');
-const path = require('path');
-
-const PENDING_MESSAGES_FILE = path.join(__dirname, '..', '..', 'data', 'auth', 'pending_messages.json');
+const repo = require('../database/repository');
 const MAX_RETRIES = 3;
 const MESSAGE_EXPIRY_MS = 5 * 60 * 1000;
 
 let isProcessing = false;
-
-const readJsonFile = (filePath) => {
-    try {
-        if (!fs.existsSync(filePath)) {
-            return null;
-        }
-        const data = fs.readFileSync(filePath, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        console.error(`[Auth] Erro ao ler arquivo ${filePath}:`, error.message);
-        return null;
-    }
-};
-
-const writeJsonFile = (filePath, data) => {
-    try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-        return true;
-    } catch (error) {
-        console.error(`[Auth] Erro ao escrever arquivo ${filePath}:`, error.message);
-        return false;
-    }
-};
 
 const isSocketReady = (sock) => {
     try {
@@ -50,9 +24,9 @@ async function processPendingAuthMessages(sock) {
             return;
         }
 
-        const pendingData = readJsonFile(PENDING_MESSAGES_FILE);
+        const pendingList = await repo.getPendingMessages();
         
-        if (!pendingData || !pendingData.pending || pendingData.pending.length === 0) {
+        if (!pendingList || pendingList.length === 0) {
             return;
         }
 
@@ -60,7 +34,7 @@ async function processPendingAuthMessages(sock) {
         const messagesToKeep = [];
         const messagesToProcess = [];
 
-        for (const msg of pendingData.pending) {
+        for (const msg of pendingList) {
             const createdAt = new Date(msg.createdAt).getTime();
             const isExpired = (now - createdAt) > MESSAGE_EXPIRY_MS;
             
@@ -83,7 +57,8 @@ async function processPendingAuthMessages(sock) {
                 
                 if (retries < MAX_RETRIES) {
                     messagesToKeep.push({
-                        ...msg,
+                        to: msg.to,
+                        message: msg.message,
                         retries,
                         lastError: err.message,
                         lastAttempt: new Date().toISOString()
@@ -95,8 +70,7 @@ async function processPendingAuthMessages(sock) {
             }
         }
 
-        pendingData.pending = messagesToKeep;
-        writeJsonFile(PENDING_MESSAGES_FILE, pendingData);
+        await repo.setPendingMessages(messagesToKeep);
 
     } catch (error) {
         console.error('[Auth] Erro ao processar mensagens pendentes:', error);

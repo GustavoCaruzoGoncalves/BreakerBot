@@ -5,25 +5,22 @@ const http = require('http');
 const sharp = require('sharp');
 const mentionsController = require('../../controllers/mentionsController');
 const { admins } = require('../../config/adm');
+const repo = require('../../database/repository');
 
-const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
-
-function loadUsersData() {
+async function loadUsersData() {
     try {
-        if (fs.existsSync(USERS_FILE)) {
-            return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-        }
+        return await repo.getAllUsers();
     } catch (error) {
-        console.error('[EMOJI REACTION] Erro ao carregar users.json:', error);
+        console.error('[EMOJI REACTION] Erro ao carregar users:', error);
+        return {};
     }
-    return {};
 }
 
-function saveUsersData(data) {
+async function saveUsersData(data) {
     try {
-        fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
+        await repo.saveAllUsers(data);
     } catch (err) {
-        console.error('[PFP] Erro ao salvar users.json:', err);
+        console.error('[PFP] Erro ao salvar users:', err);
     }
 }
 
@@ -293,8 +290,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
        // }
    // }
 
-    function getPushName(jid) {
-        return mentionsController.getPushName(jid, contactsCache);
+    async function getPushName(jid) {
+        return await mentionsController.getPushName(jid, contactsCache);
     }
 
     function getRandomPercentage() {
@@ -335,7 +332,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
         if (mentionedJid && mentionedJid.length > 0) {
             const userToMention = mentionedJid[0];
-            const mentionInfo = mentionsController.processSingleMention(userToMention, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(userToMention, contactsCache);
             let percentage = getRandomPercentage();
             let replyText;
             
@@ -414,7 +411,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     }
 
     // Verifica reação de emoji personalizada do usuário
-    const usersData = loadUsersData();
+    const usersData = await loadUsersData();
     
     // Busca o usuário pelo sender ou pelo jid associado
     let userEmojiConfig = null;
@@ -518,7 +515,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         
         if (mentionedJid && mentionedJid.length > 0) {
             const userToMention = mentionedJid[0];
-            const mentionInfo = mentionsController.processSingleMention(userToMention, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(userToMention, contactsCache);
             let replyText;
             
             if (isSpecial) {
@@ -553,8 +550,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 let replyText;
                 
                 if (isSpecial) {
-                    const mentionInfo = mentionsController.processSingleMention(sender, contactsCache);
-                    
+                    const mentionInfo = await mentionsController.processSingleMention(sender, contactsCache);
+
                     await sock.sendMessage(chatId, {
                         text: `${mentionInfo.mentionText}, VOCÊ TEM 1000km DE PICA KKKKKKKKKKKKKKKKKK`,
                         mentions: mentionInfo.mentions,
@@ -668,7 +665,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }, { quoted: msg });
                 return;
             }
-            mentionsController.setMentionsEnabled(true);
+            await mentionsController.setMentionsEnabled(true);
             await sock.sendMessage(chatId, {
                 text: "✅ Marcações ativadas! Agora os usuários podem ser mencionados (respeitando suas preferências individuais).",
             }, { quoted: msg });
@@ -679,12 +676,12 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 }, { quoted: msg });
                 return;
             }
-            mentionsController.setMentionsEnabled(false);
+            await mentionsController.setMentionsEnabled(false);
             await sock.sendMessage(chatId, {
                 text: "❌ Marcações desativadas! Os nomes serão exibidos no lugar das menções.",
             }, { quoted: msg });
         } else {
-            const status = mentionsController.getMentionsEnabled() ? "ativadas" : "desativadas";
+            const status = (await mentionsController.getMentionsEnabled()) ? "ativadas" : "desativadas";
             await sock.sendMessage(chatId, {
                 text: `📋 Status das marcações: ${status}\n\nUse !marcacoes on para ativar ou !marcacoes off para desativar.`,
             }, { quoted: msg });
@@ -698,20 +695,20 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         const userJid = msg.key.participantAlt || msg.key.participant || sender;
         
         if (args === "on") {
-            mentionsController.setUserMentionPreference(userJid, true);
-            const globalStatus = mentionsController.getMentionsEnabled() ? "ativadas" : "desativadas";
+            await mentionsController.setUserMentionPreference(userJid, true);
+            const globalStatus = (await mentionsController.getMentionsEnabled()) ? "ativadas" : "desativadas";
             await sock.sendMessage(chatId, {
                 text: `✅ Suas marcações foram ativadas!\n\nNota: As marcações globais estão ${globalStatus}. Sua preferência será respeitada quando as marcações globais estiverem ativadas.`,
             }, { quoted: msg });
         } else if (args === "off") {
-            mentionsController.setUserMentionPreference(userJid, false);
-            const globalStatus = mentionsController.getMentionsEnabled() ? "ativadas" : "desativadas";
+            await mentionsController.setUserMentionPreference(userJid, false);
+            const globalStatus = (await mentionsController.getMentionsEnabled()) ? "ativadas" : "desativadas";
             await sock.sendMessage(chatId, {
                 text: `❌ Suas marcações foram desativadas!\n\nNota: As marcações globais estão ${globalStatus}. Você não será mencionado mesmo quando as marcações globais estiverem ativadas.`,
             }, { quoted: msg });
         } else {
-            const userPref = mentionsController.getUserMentionPreference(userJid) ? "ativadas" : "desativadas";
-            const globalStatus = mentionsController.getMentionsEnabled() ? "ativadas" : "desativadas";
+            const userPref = (await mentionsController.getUserMentionPreference(userJid)) ? "ativadas" : "desativadas";
+            const globalStatus = (await mentionsController.getMentionsEnabled()) ? "ativadas" : "desativadas";
             await sock.sendMessage(chatId, {
                 text: `📋 Suas marcações pessoais: ${userPref}\n📋 Marcações globais: ${globalStatus}\n\nUse !marcarMe on para ativar ou !marcarMe off para desativar suas marcações pessoais.`,
             }, { quoted: msg });
@@ -754,7 +751,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             return;
         }
         
-        mentionsController.setCustomName(userJid, customName);
+        await mentionsController.setCustomName(userJid, customName);
         await sock.sendMessage(chatId, {
             text: `✅ Nome personalizado definido como: "${customName}"\n\nUse !customName on para ativar ou !customName off para desativar.`,
         }, { quoted: msg });
@@ -767,17 +764,17 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         const userJid = msg.key.participantAlt || msg.key.participant || sender;
         
         if (args === "on") {
-            mentionsController.setCustomNameEnabled(userJid, true);
+            await mentionsController.setCustomNameEnabled(userJid, true);
             await sock.sendMessage(chatId, {
                 text: "✅ Nome personalizado ativado! Seu nome personalizado será usado quando disponível.",
             }, { quoted: msg });
         } else if (args === "off") {
-            mentionsController.setCustomNameEnabled(userJid, false);
+            await mentionsController.setCustomNameEnabled(userJid, false);
             await sock.sendMessage(chatId, {
                 text: "❌ Nome personalizado desativado! Seu pushName será usado quando disponível.",
             }, { quoted: msg });
         } else {
-            const usersData = mentionsController.getUsersData();
+            const usersData = await mentionsController.getUsersData();
             const user = usersData[userJid];
             let customNameStatus = "desativado";
             let customNameValue = null;
@@ -827,8 +824,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             name1 = inputText.slice(0, spaceIndex).trim();
             name2 = inputText.slice(spaceIndex + 1).trim();
         } else if (mentionedJid.length === 2) {
-            const mentionInfo1 = mentionsController.processSingleMention(mentionedJid[0], contactsCache);
-            const mentionInfo2 = mentionsController.processSingleMention(mentionedJid[1], contactsCache);
+            const mentionInfo1 = await mentionsController.processSingleMention(mentionedJid[0], contactsCache);
+            const mentionInfo2 = await mentionsController.processSingleMention(mentionedJid[1], contactsCache);
             name1 = mentionInfo1.mentionText;
             name2 = mentionInfo2.mentionText;
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
@@ -839,14 +836,14 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        const processName = (name) => {
+        const processName = async (name) => {
             const lowerName = name.toLowerCase().trim();
             if (lowerName === "eu" || lowerName === "me") {
                 return "Você";
             }
-            
+
             if (name.includes("@") && mentionedJid.length > mentionIndex) {
-                const mentionInfo = mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
                 mentions.push(...mentionInfo.mentions);
                 mentionIndex++;
                 return mentionInfo.mentionText;
@@ -856,8 +853,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         };
 
         if (name1 && name2) {
-            name1 = processName(name1);
-            name2 = processName(name2);
+            name1 = await processName(name1);
+            name2 = await processName(name2);
         }
 
         if (!name1 || !name2) {
@@ -901,8 +898,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             name1 = inputText.slice(0, spaceIndex).trim();
             name2 = inputText.slice(spaceIndex + 1).trim();
         } else if (mentionedJid.length === 2) {
-            const mentionInfo1 = mentionsController.processSingleMention(mentionedJid[0], contactsCache);
-            const mentionInfo2 = mentionsController.processSingleMention(mentionedJid[1], contactsCache);
+            const mentionInfo1 = await mentionsController.processSingleMention(mentionedJid[0], contactsCache);
+            const mentionInfo2 = await mentionsController.processSingleMention(mentionedJid[1], contactsCache);
             name1 = mentionInfo1.mentionText;
             name2 = mentionInfo2.mentionText;
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
@@ -913,14 +910,14 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        const processName = (name) => {
+        const processName = async (name) => {
             const lowerName = name.toLowerCase().trim();
             if (lowerName === "eu" || lowerName === "me") {
                 return "Você";
             }
-            
+
             if (name.includes("@") && mentionedJid.length > mentionIndex) {
-                const mentionInfo = mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
                 mentions.push(...mentionInfo.mentions);
                 mentionIndex++;
                 return mentionInfo.mentionText;
@@ -930,8 +927,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         };
 
         if (name1 && name2) {
-            name1 = processName(name1);
-            name2 = processName(name2);
+            name1 = await processName(name1);
+            name2 = await processName(name2);
         }
 
         if (!name1 || !name2) {
@@ -974,8 +971,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             name1 = inputText.slice(0, spaceIndex).trim();
             name2 = inputText.slice(spaceIndex + 1).trim();
         } else if (mentionedJid.length === 2) {
-            const mentionInfo1 = mentionsController.processSingleMention(mentionedJid[0], contactsCache);
-            const mentionInfo2 = mentionsController.processSingleMention(mentionedJid[1], contactsCache);
+            const mentionInfo1 = await mentionsController.processSingleMention(mentionedJid[0], contactsCache);
+            const mentionInfo2 = await mentionsController.processSingleMention(mentionedJid[1], contactsCache);
             name1 = mentionInfo1.mentionText;
             name2 = mentionInfo2.mentionText;
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
@@ -986,14 +983,14 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        const processName = (name) => {
+        const processName = async (name) => {
             const lowerName = name.toLowerCase().trim();
             if (lowerName === "eu" || lowerName === "me") {
                 return "Você";
             }
-            
+
             if (name.includes("@") && mentionedJid.length > mentionIndex) {
-                const mentionInfo = mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
                 mentions.push(...mentionInfo.mentions);
                 mentionIndex++;
                 return mentionInfo.mentionText;
@@ -1003,8 +1000,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         };
 
         if (name1 && name2) {
-            name1 = processName(name1);
-            name2 = processName(name2);
+            name1 = await processName(name1);
+            name2 = await processName(name2);
         }
 
         if (!name1 || !name2) {
@@ -1048,8 +1045,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             name1 = inputText.slice(0, spaceIndex).trim();
             name2 = inputText.slice(spaceIndex + 1).trim();
         } else if (mentionedJid.length === 2) {
-            const mentionInfo1 = mentionsController.processSingleMention(mentionedJid[0], contactsCache);
-            const mentionInfo2 = mentionsController.processSingleMention(mentionedJid[1], contactsCache);
+            const mentionInfo1 = await mentionsController.processSingleMention(mentionedJid[0], contactsCache);
+            const mentionInfo2 = await mentionsController.processSingleMention(mentionedJid[1], contactsCache);
             name1 = mentionInfo1.mentionText;
             name2 = mentionInfo2.mentionText;
             mentions = [...mentionInfo1.mentions, ...mentionInfo2.mentions];
@@ -1060,14 +1057,14 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             return;
         }
 
-        const processName = (name) => {
+        const processName = async (name) => {
             const lowerName = name.toLowerCase().trim();
             if (lowerName === "eu" || lowerName === "me") {
                 return "Você";
             }
-            
+
             if (name.includes("@") && mentionedJid.length > mentionIndex) {
-                const mentionInfo = mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(mentionedJid[mentionIndex], contactsCache);
                 mentions.push(...mentionInfo.mentions);
                 mentionIndex++;
                 return mentionInfo.mentionText;
@@ -1077,8 +1074,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         };
 
         if (name1 && name2) {
-            name1 = processName(name1);
-            name2 = processName(name2);
+            name1 = await processName(name1);
+            name2 = await processName(name2);
         }
 
         if (!name1 || !name2) {
@@ -1144,14 +1141,14 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         }
 
         try {
-            let usersData = loadUsersData();
+            let usersData = await loadUsersData();
             const { key, user } = findUserByJid(usersData, targetUserId);
 
             if (user?.profilePicture) {
                 const base64Data = user.profilePicture.split(',')[1];
                 const imageBuffer = Buffer.from(base64Data, 'base64');
 
-                const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
                 await sock.sendMessage(chatId, {
                     image: imageBuffer,
                     caption: `📸 Foto de perfil de ${mentionInfo.mentionText}\n\n✅ Carregada do cache\n🕐 Última atualização: ${user.profilePictureUpdatedAt ? new Date(user.profilePictureUpdatedAt).toLocaleString('pt-BR') : 'N/A'}`,
@@ -1176,10 +1173,10 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             if (key) {
                 usersData[key].profilePicture = base64Image;
                 usersData[key].profilePictureUpdatedAt = new Date().toISOString();
-                saveUsersData(usersData);
+                await saveUsersData(usersData);
             }
 
-            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
             await sock.sendMessage(chatId, {
                 image: imageBuffer,
                 caption: `📸 Foto de perfil de ${mentionInfo.mentionText}\n\n🔄 Buscada do WhatsApp`,
@@ -1225,7 +1222,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         try {
             let imageBuffer = null;
             
-            let usersData = loadUsersData();
+            let usersData = await loadUsersData();
             const { key, user } = findUserByJid(usersData, targetUserId);
 
             if (user?.profilePicture) {
@@ -1248,13 +1245,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 if (key) {
                     usersData[key].profilePicture = base64Image;
                     usersData[key].profilePictureUpdatedAt = new Date().toISOString();
-                    saveUsersData(usersData);
+                    await saveUsersData(usersData);
                 }
             }
 
             const grayscaleBuffer = await applyGrayscaleFilter(imageBuffer);
 
-            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
             await sock.sendMessage(chatId, {
                 image: grayscaleBuffer,
                 caption: `🪦 ${mentionInfo.mentionText} ⚰️`,
@@ -1300,7 +1297,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         try {
             let imageBuffer = null;
             
-            let usersData = loadUsersData();
+            let usersData = await loadUsersData();
             const { key, user } = findUserByJid(usersData, targetUserId);
 
             if (user?.profilePicture) {
@@ -1323,13 +1320,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 if (key) {
                     usersData[key].profilePicture = base64Image;
                     usersData[key].profilePictureUpdatedAt = new Date().toISOString();
-                    saveUsersData(usersData);
+                    await saveUsersData(usersData);
                 }
             }
 
             const lgbtBuffer = await applyLGBTFilter(imageBuffer);
 
-            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
             await sock.sendMessage(chatId, {
                 image: lgbtBuffer,
                 caption: `🌈 ${mentionInfo.mentionText} 🏳️‍🌈`,
@@ -1375,7 +1372,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         try {
             let imageBuffer = null;
             
-            let usersData = loadUsersData();
+            let usersData = await loadUsersData();
             const { key, user } = findUserByJid(usersData, targetUserId);
 
             if (user?.profilePicture) {
@@ -1398,13 +1395,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 if (key) {
                     usersData[key].profilePicture = base64Image;
                     usersData[key].profilePictureUpdatedAt = new Date().toISOString();
-                    saveUsersData(usersData);
+                    await saveUsersData(usersData);
                 }
             }
 
             const bolsonaroBuffer = await applyBolsonaroFilter(imageBuffer);
 
-            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
             await sock.sendMessage(chatId, {
                 image: bolsonaroBuffer,
                 caption: `🇧🇷 ${mentionInfo.mentionText} 2026`,
@@ -1450,7 +1447,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         try {
             let imageBuffer = null;
             
-            let usersData = loadUsersData();
+            let usersData = await loadUsersData();
             const { key, user } = findUserByJid(usersData, targetUserId);
 
             if (user?.profilePicture) {
@@ -1473,13 +1470,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 if (key) {
                     usersData[key].profilePicture = base64Image;
                     usersData[key].profilePictureUpdatedAt = new Date().toISOString();
-                    saveUsersData(usersData);
+                    await saveUsersData(usersData);
                 }
             }
 
             const bolsonaro2Buffer = await applyBolsonaro2Filter(imageBuffer);
 
-            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
             await sock.sendMessage(chatId, {
                 image: bolsonaro2Buffer,
                 caption: `🇧🇷 ${mentionInfo.mentionText} COM BOLSONARO`,
@@ -1525,7 +1522,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         try {
             let imageBuffer = null;
             
-            let usersData = loadUsersData();
+            let usersData = await loadUsersData();
             const { key, user } = findUserByJid(usersData, targetUserId);
 
             if (user?.profilePicture) {
@@ -1548,13 +1545,13 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
                 if (key) {
                     usersData[key].profilePicture = base64Image;
                     usersData[key].profilePictureUpdatedAt = new Date().toISOString();
-                    saveUsersData(usersData);
+                    await saveUsersData(usersData);
                 }
             }
 
             const framedBuffer = await applyBolsonaro3Filter(imageBuffer);
 
-            const mentionInfo = mentionsController.processSingleMention(targetUserId, contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
             await sock.sendMessage(chatId, {
                 image: framedBuffer,
                 caption: `🟢 ${mentionInfo.mentionText} DEUS, PÁTRIA, FAMÍLIA, LIBERDADE 🟡`,
@@ -1667,7 +1664,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
 
             for (let i = 0; i < selected.length; i++) {
                 const userJid = selected[i];
-                const mentionInfo = mentionsController.processSingleMention(userJid, contactsCache);
+                const mentionInfo = await mentionsController.processSingleMention(userJid, contactsCache);
                 
                 console.log(`[DEBUG] Enviando mensagem ${i + 1} para: ${userJid} (${mentionInfo.mentionText})`);
                 

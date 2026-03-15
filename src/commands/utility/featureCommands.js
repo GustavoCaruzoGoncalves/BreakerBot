@@ -1,38 +1,5 @@
-const fs = require('fs');
-const path = require('path');
 const { admins } = require('../../config/adm');
-
-const FEATURES_FILE = path.join(__dirname, '..', '..', '..', 'data', 'features.json');
-
-function readFeatures() {
-    try {
-        if (!fs.existsSync(FEATURES_FILE)) {
-            return [];
-        }
-        const data = fs.readFileSync(FEATURES_FILE, 'utf8');
-        if (!data.trim()) return [];
-        const parsed = JSON.parse(data);
-        if (Array.isArray(parsed)) return parsed;
-        return [];
-    } catch (err) {
-        console.error('[DEBUG] Erro ao ler features.json:', err);
-        return [];
-    }
-}
-
-function writeFeatures(features) {
-    try {
-        const dir = path.dirname(FEATURES_FILE);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(FEATURES_FILE, JSON.stringify(features, null, 2));
-        return true;
-    } catch (err) {
-        console.error('[DEBUG] Erro ao salvar features.json:', err);
-        return false;
-    }
-}
+const repo = require('../../database/repository');
 
 async function featureCommandsBot(sock, { messages }) {
     const msg = messages[0];
@@ -72,45 +39,43 @@ async function featureCommandsBot(sock, { messages }) {
             return;
         }
 
-        const features = readFeatures();
-        const newFeature = {
-            id: features.length + 1,
-            description,
-            status: "pending",
-            createdAt: new Date().toISOString(),
-            createdBy: sender
-        };
-        features.push(newFeature);
-
-        if (!writeFeatures(features)) {
+        try {
+            const newFeature = await repo.addFeature(description, sender);
+            await sock.sendMessage(chatId, {
+                text: `✅ Feature #${newFeature.id} adicionada:\n${newFeature.description}`
+            }, { quoted: msg });
+        } catch (err) {
+            console.error('[DEBUG] Erro ao salvar feature:', err);
             await sock.sendMessage(chatId, {
                 text: "❌ Erro ao salvar a feature. Tente novamente mais tarde."
             }, { quoted: msg });
-            return;
         }
-
-        await sock.sendMessage(chatId, {
-            text: `✅ Feature #${newFeature.id} adicionada:\n${newFeature.description}`
-        }, { quoted: msg });
         return;
     }
 
     if (subcommand === 'lista') {
-        const features = readFeatures();
-        if (features.length === 0) {
+        try {
+            const features = await repo.getFeatures();
+            if (features.length === 0) {
+                await sock.sendMessage(chatId, {
+                    text: "📭 Nenhuma feature cadastrada ainda.\nUse *!feature add descrição* para criar uma."
+                }, { quoted: msg });
+                return;
+            }
+
+            let message = "🛠 *Lista de Features*\n\n";
+            for (const f of features) {
+                const statusIcon = f.status === 'finished' ? '✅' : '📝';
+                message += `#${f.id} ${statusIcon} ${f.description}\n`;
+            }
+
+            await sock.sendMessage(chatId, { text: message }, { quoted: msg });
+        } catch (err) {
+            console.error('[DEBUG] Erro ao ler features:', err);
             await sock.sendMessage(chatId, {
-                text: "📭 Nenhuma feature cadastrada ainda.\nUse *!feature add descrição* para criar uma."
+                text: "❌ Erro ao carregar features. Tente novamente mais tarde."
             }, { quoted: msg });
-            return;
         }
-
-        let message = "🛠 *Lista de Features*\n\n";
-        for (const f of features) {
-            const statusIcon = f.status === 'finished' ? '✅' : '📝';
-            message += `#${f.id} ${statusIcon} ${f.description}\n`;
-        }
-
-        await sock.sendMessage(chatId, { text: message }, { quoted: msg });
         return;
     }
 
@@ -130,28 +95,26 @@ async function featureCommandsBot(sock, { messages }) {
             return;
         }
 
-        const features = readFeatures();
-        const index = features.findIndex(f => f.id === num);
-        if (index === -1) {
+        try {
+            const features = await repo.getFeatures();
+            const feature = features.find(f => f.id === num);
+            if (!feature) {
+                await sock.sendMessage(chatId, {
+                    text: `❌ Feature #${num} não encontrada.`
+                }, { quoted: msg });
+                return;
+            }
+
+            await repo.updateFeatureStatus(num, 'finished');
             await sock.sendMessage(chatId, {
-                text: `❌ Feature #${num} não encontrada.`
+                text: `✅ Feature #${num} marcada como *finalizada*:\n${feature.description}`
             }, { quoted: msg });
-            return;
-        }
-
-        features[index].status = 'finished';
-        features[index].finishedAt = new Date().toISOString();
-
-        if (!writeFeatures(features)) {
+        } catch (err) {
+            console.error('[DEBUG] Erro ao atualizar feature:', err);
             await sock.sendMessage(chatId, {
                 text: "❌ Erro ao atualizar a feature. Tente novamente mais tarde."
             }, { quoted: msg });
-            return;
         }
-
-        await sock.sendMessage(chatId, {
-            text: `✅ Feature #${num} marcada como *finalizada*:\n${features[index].description}`
-        }, { quoted: msg });
         return;
     }
 
@@ -164,32 +127,26 @@ async function featureCommandsBot(sock, { messages }) {
             return;
         }
 
-        let features = readFeatures();
-        const index = features.findIndex(f => f.id === num);
-        if (index === -1) {
+        try {
+            const features = await repo.getFeatures();
+            const feature = features.find(f => f.id === num);
+            if (!feature) {
+                await sock.sendMessage(chatId, {
+                    text: `❌ Feature #${num} não encontrada.`
+                }, { quoted: msg });
+                return;
+            }
+
+            await repo.removeFeature(num);
             await sock.sendMessage(chatId, {
-                text: `❌ Feature #${num} não encontrada.`
+                text: `🗑 Feature removida:\n${feature.description}`
             }, { quoted: msg });
-            return;
-        }
-
-        const removed = features.splice(index, 1)[0];
-
-        features = features.map((f, idx) => ({
-            ...f,
-            id: idx + 1
-        }));
-
-        if (!writeFeatures(features)) {
+        } catch (err) {
+            console.error('[DEBUG] Erro ao remover feature:', err);
             await sock.sendMessage(chatId, {
                 text: "❌ Erro ao remover a feature. Tente novamente mais tarde."
             }, { quoted: msg });
-            return;
         }
-
-        await sock.sendMessage(chatId, {
-            text: `🗑 Feature removida:\n${removed.description}`
-        }, { quoted: msg });
         return;
     }
 
@@ -199,4 +156,3 @@ async function featureCommandsBot(sock, { messages }) {
 }
 
 module.exports = featureCommandsBot;
-

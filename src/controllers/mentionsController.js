@@ -1,72 +1,56 @@
-const path = require('path');
-const fs = require('fs');
+const repo = require('../database/repository');
 
-const MENTIONS_PREFS_FILE = path.resolve(__dirname, '..', '..', 'data', 'mentions', 'mentions_preferences.json');
-const USERS_DATA_FILE = path.resolve(__dirname, '..', '..', 'levels_info', 'users.json');
-
-function loadMentionsPreferences() {
+async function loadMentionsPreferences() {
     try {
-        if (fs.existsSync(MENTIONS_PREFS_FILE)) {
-            const data = fs.readFileSync(MENTIONS_PREFS_FILE, 'utf8');
-            return JSON.parse(data);
-        }
+        return await repo.getMentionsPreferences();
     } catch (error) {
         console.error('Erro ao carregar preferências de marcações:', error);
+        return { globalEnabled: false };
     }
-    return {
-        globalEnabled: false
-    };
 }
 
-function saveMentionsPreferences(prefs) {
+async function saveMentionsPreferences(prefs) {
     try {
-        fs.writeFileSync(MENTIONS_PREFS_FILE, JSON.stringify(prefs, null, 2), 'utf8');
+        await repo.updateMentionsPreferences(prefs);
     } catch (error) {
         console.error('Erro ao salvar preferências de marcações:', error);
     }
 }
 
-function readUsersData() {
+async function readUsersData() {
     try {
-        if (fs.existsSync(USERS_DATA_FILE)) {
-            const data = fs.readFileSync(USERS_DATA_FILE, 'utf8');
-            return JSON.parse(data);
-        }
+        return await repo.getAllUsers();
     } catch (error) {
         console.error('Erro ao ler dados dos usuários:', error);
+        return {};
     }
-    return {};
 }
 
-function writeUsersData(data) {
+async function writeUsersData(data) {
     try {
-        const dir = path.dirname(USERS_DATA_FILE);
-        if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(USERS_DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+        await repo.saveAllUsers(data);
     } catch (error) {
         console.error('Erro ao salvar dados dos usuários:', error);
     }
 }
 
-function getUsersData() {
+async function getUsersData() {
     return readUsersData();
 }
 
-function getMentionsEnabled() {
-    const prefs = loadMentionsPreferences();
+async function getMentionsEnabled() {
+    const prefs = await loadMentionsPreferences();
     return prefs.globalEnabled || false;
 }
 
-function setMentionsEnabled(enabled) {
-    const prefs = loadMentionsPreferences();
+async function setMentionsEnabled(enabled) {
+    const prefs = await loadMentionsPreferences();
     prefs.globalEnabled = enabled;
-    saveMentionsPreferences(prefs);
+    await saveMentionsPreferences(prefs);
 }
 
-function getUserMentionPreference(jid) {
-    const usersData = readUsersData();
+async function getUserMentionPreference(jid) {
+    const usersData = await readUsersData();
     
     let user = null;
     
@@ -98,8 +82,8 @@ function getUserMentionPreference(jid) {
     return user.allowMentions === true;
 }
 
-function setUserMentionPreference(jid, enabled) {
-    const usersData = readUsersData();
+async function setUserMentionPreference(jid, enabled) {
+    const usersData = await readUsersData();
     
     if (!usersData[jid]) {
         usersData[jid] = {
@@ -120,11 +104,11 @@ function setUserMentionPreference(jid, enabled) {
         usersData[jid].allowMentions = enabled;
     }
     
-    writeUsersData(usersData);
+    await writeUsersData(usersData);
 }
 
-function setCustomName(jid, customName) {
-    const usersData = readUsersData();
+async function setCustomName(jid, customName) {
+    const usersData = await readUsersData();
     
     if (!usersData[jid]) {
         usersData[jid] = {
@@ -148,11 +132,11 @@ function setCustomName(jid, customName) {
         usersData[jid].customNameEnabled = true;
     }
     
-    writeUsersData(usersData);
+    await writeUsersData(usersData);
 }
 
-function setCustomNameEnabled(jid, enabled) {
-    const usersData = readUsersData();
+async function setCustomNameEnabled(jid, enabled) {
+    const usersData = await readUsersData();
     
     if (!usersData[jid]) {
         usersData[jid] = {
@@ -174,18 +158,18 @@ function setCustomNameEnabled(jid, enabled) {
         usersData[jid].customNameEnabled = enabled;
     }
     
-    writeUsersData(usersData);
+    await writeUsersData(usersData);
 }
 
-function canMentionUser(jid) {
-    const globalEnabled = getMentionsEnabled();
+async function canMentionUser(jid) {
+    const globalEnabled = await getMentionsEnabled();
     if (!globalEnabled) {
         return false;
     }
     return getUserMentionPreference(jid);
 }
 
-function getUserDisplayName(jid, contactsCache = {}) {
+async function getUserDisplayName(jid, contactsCache = {}) {
     if (!jid) {
         return {
             displayName: null,
@@ -194,7 +178,7 @@ function getUserDisplayName(jid, contactsCache = {}) {
         };
     }
     
-    const usersData = readUsersData();
+    const usersData = await readUsersData();
     
     let user = null;
     
@@ -238,16 +222,16 @@ function getUserDisplayName(jid, contactsCache = {}) {
     };
 }
 
-function getPushName(jid, contactsCache = {}) {
-    const nameInfo = getUserDisplayName(jid, contactsCache);
+async function getPushName(jid, contactsCache = {}) {
+    const nameInfo = await getUserDisplayName(jid, contactsCache);
     return nameInfo.displayName || jid.split('@')[0];
 }
 
-function processMentions(jids, contactsCache = {}) {
-    const canMention = jids.map(jid => canMentionUser(jid));
+async function processMentions(jids, contactsCache = {}) {
+    const canMention = await Promise.all(jids.map(jid => canMentionUser(jid)));
     const mentions = jids.filter((jid, index) => canMention[index]);
-    const displayNames = jids.map((jid, index) => {
-        const nameInfo = getUserDisplayName(jid, contactsCache);
+    const displayNames = await Promise.all(jids.map(async (jid, index) => {
+        const nameInfo = await getUserDisplayName(jid, contactsCache);
         
         if (canMention[index]) {
             if (nameInfo.hasCustomName) {
@@ -258,7 +242,7 @@ function processMentions(jids, contactsCache = {}) {
         } else {
             return nameInfo.displayName || "O usuário mencionado";
         }
-    });
+    }));
     
     return {
         canMention,
@@ -267,9 +251,9 @@ function processMentions(jids, contactsCache = {}) {
     };
 }
 
-function processSingleMention(jid, contactsCache = {}) {
-    const canMention = canMentionUser(jid);
-    const nameInfo = getUserDisplayName(jid, contactsCache);
+async function processSingleMention(jid, contactsCache = {}) {
+    const canMention = await canMentionUser(jid);
+    const nameInfo = await getUserDisplayName(jid, contactsCache);
     
     let mentionText;
     const mentions = canMention ? [jid] : [];
@@ -301,8 +285,8 @@ function processSingleMention(jid, contactsCache = {}) {
     };
 }
 
-function processMultipleMentions(jids, contactsCache = {}) {
-    const result = processMentions(jids, contactsCache);
+async function processMultipleMentions(jids, contactsCache = {}) {
+    const result = await processMentions(jids, contactsCache);
     return {
         mentionTexts: result.displayNames,
         mentions: result.mentions
@@ -325,4 +309,3 @@ module.exports = {
     setCustomName,
     setCustomNameEnabled
 };
-

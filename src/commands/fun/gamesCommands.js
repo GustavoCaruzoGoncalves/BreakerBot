@@ -125,8 +125,8 @@ async function sendMessageWithRetry(sock, chatId, message, mentions = [], retrie
     }
 }
 
-function getPlayerMentionPrefix(playerId) {
-    const mentionInfo = mentionsController.processSingleMention(playerId);
+async function getPlayerMentionPrefix(playerId) {
+    const mentionInfo = await mentionsController.processSingleMention(playerId);
     return {
         prefix: `🎯 Jogo de ${mentionInfo.mentionText}\n\n`,
         mentions: mentionInfo.mentions
@@ -144,7 +144,7 @@ async function gamesCommandsBot(sock, { messages }) {
 
     if (text === "!trivia start") {
         const playerGame = resetPlayerGame(playerId);
-        const { prefix, mentions } = getPlayerMentionPrefix(playerId);
+        const { prefix, mentions } = await getPlayerMentionPrefix(playerId);
         
         await sendMessageWithRetry(sock, chatId, `${prefix}Bem-vindo ao jogo de trivia! Gerando perguntas com IA... ⏳`, mentions);
         
@@ -170,7 +170,7 @@ async function gamesCommandsBot(sock, { messages }) {
 
     else if (text && text.startsWith("!trivia resposta")) {
         const userAnswer = text.split(" ")[2];
-        const { prefix, mentions } = getPlayerMentionPrefix(playerId);
+        const { prefix, mentions } = await getPlayerMentionPrefix(playerId);
         
         if (!userAnswer) {
             await sendMessageWithRetry(sock, chatId, `${prefix}Por favor, forneça uma resposta (A, B, C ou D). Exemplo: !trivia resposta A`, mentions);
@@ -205,7 +205,7 @@ async function gamesCommandsBot(sock, { messages }) {
 
 async function askNextQuestion(sock, chatId, playerId) {
     const playerGame = getPlayerGame(playerId);
-    const { prefix, mentions } = getPlayerMentionPrefix(playerId);
+    const { prefix, mentions } = await getPlayerMentionPrefix(playerId);
     
     if (playerGame.questionIndex < playerGame.triviaQuestions.length) {
         setTimeout(async () => {

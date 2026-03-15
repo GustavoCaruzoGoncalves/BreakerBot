@@ -1,21 +1,33 @@
-const path = require('path');
-const fs = require('fs');
 const { admins } = require('../../config/adm');
 const mentionsController = require('../../controllers/mentionsController');
+const repo = require('../../database/repository');
 
-const AMIGO_SECRETO_DATA_FILE = path.resolve(__dirname, '..', '..', '..', 'data', 'amigoSecreto', 'participantes.json');
-const USERS_FILE = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
-
-function loadUsersData() {
+async function loadUsersData() {
     try {
-        if (fs.existsSync(USERS_FILE)) {
-            const data = fs.readFileSync(USERS_FILE, 'utf8');
-            return JSON.parse(data);
+        return await repo.getAllUsers();
+    } catch (error) {
+        console.error('Erro ao carregar users:', error);
+        return {};
+    }
+}
+
+async function loadParticipantes() {
+    try {
+        return await repo.getAmigoSecretoAll();
+    } catch (error) {
+        console.error('Erro ao carregar participantes:', error);
+        return {};
+    }
+}
+
+async function saveParticipantes(data) {
+    try {
+        for (const [groupId, groupData] of Object.entries(data)) {
+            await repo.saveAmigoSecretoGroup(groupId, groupData);
         }
     } catch (error) {
-        console.error('Erro ao carregar users.json:', error);
+        console.error('Erro ao salvar participantes:', error);
     }
-    return {};
 }
 
 function getParticipantName(jid, usersData, contactsCache) {
@@ -39,54 +51,27 @@ function getParticipantName(jid, usersData, contactsCache) {
     return jid.split('@')[0];
 }
 
-function ensureDirectoryExists() {
-    const dir = path.dirname(AMIGO_SECRETO_DATA_FILE);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-}
+async function atualizarNomesParticipantes(participantesData, chatId, usersData, contactsCache) {
+    const grupo = participantesData[chatId];
+    if (!grupo || !grupo.participantes || grupo.participantes.length === 0) return false;
 
-function loadParticipantes() {
-    try {
-        ensureDirectoryExists();
-        if (fs.existsSync(AMIGO_SECRETO_DATA_FILE)) {
-            const data = fs.readFileSync(AMIGO_SECRETO_DATA_FILE, 'utf8');
-            const parsed = JSON.parse(data);
-            const migrated = {};
-            for (const [groupId, value] of Object.entries(parsed)) {
-                if (Array.isArray(value)) {
-                    migrated[groupId] = {
-                        groupName: null,
-                        participantes: value,
-                        presentes: {},
-                        nomes: {},
-                        sorteio: null
-                    };
-                } else {
-                    migrated[groupId] = {
-                        groupName: value.groupName || null,
-                        participantes: value.participantes || [],
-                        presentes: value.presentes || {},
-                        nomes: value.nomes || {},
-                        sorteio: value.sorteio || null
-                    };
-                }
+    let alterou = false;
+    const nomes = grupo.nomes || {};
+
+    for (const jid of grupo.participantes) {
+        const nomeAtual = nomes[jid];
+        if (nomeAtual && /^Participante \d+$/.test(nomeAtual)) {
+            const nomeReal = getParticipantName(jid, usersData, contactsCache);
+            const numero = jid.split('@')[0];
+            if (nomeReal && nomeReal.trim() && nomeReal !== numero) {
+                nomes[jid] = nomeReal;
+                alterou = true;
             }
-            return migrated;
         }
-    } catch (error) {
-        console.error('Erro ao carregar participantes:', error);
     }
-    return {};
-}
 
-function saveParticipantes(data) {
-    try {
-        ensureDirectoryExists();
-        fs.writeFileSync(AMIGO_SECRETO_DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
-    } catch (error) {
-        console.error('Erro ao salvar participantes:', error);
-    }
+    if (alterou) grupo.nomes = nomes;
+    return alterou;
 }
 
 async function findGroupByName(sock, nomeGrupo) {
@@ -186,6 +171,14 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
     const comando = partes[1];
     const subComando = partes[2];
 
+    if (chatId.endsWith('@g.us')) {
+        const participantesData = await loadParticipantes();
+        const usersData = await loadUsersData();
+        if (await atualizarNomesParticipantes(participantesData, chatId, usersData, contactsCache)) {
+            await saveParticipantes(participantesData);
+        }
+    }
+
     if (comando === 'listapresente') {
         if (subComando === 'add') {
             if (!isGroup) {
@@ -195,7 +188,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            const participantesData = loadParticipantes();
+            const participantesData = await loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
                     text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
@@ -235,7 +228,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             } else {
                 participantesData[chatId].presentes[participantJid] = presente;
             }
-            saveParticipantes(participantesData);
+            await saveParticipantes(participantesData);
 
             await sock.sendMessage(chatId, {
                 text: `✅ Presente adicionado com sucesso!\n\n🎁 Seus desejos: *${participantesData[chatId].presentes[participantJid]}*`,
@@ -250,7 +243,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            const participantesData = loadParticipantes();
+            const participantesData = await loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
                     text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
@@ -279,7 +272,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             }
 
             delete participantesData[chatId].presentes[participantJid];
-            saveParticipantes(participantesData);
+            await saveParticipantes(participantesData);
 
             await sock.sendMessage(chatId, {
                 text: `✅ Presente removido com sucesso!`,
@@ -294,7 +287,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            const participantesData = loadParticipantes();
+            const participantesData = await loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
                     text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
@@ -329,7 +322,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             }
 
             participantesData[chatId].presentes[participantJid] = presente;
-            saveParticipantes(participantesData);
+            await saveParticipantes(participantesData);
 
             await sock.sendMessage(chatId, {
                 text: `✅ Presente editado com sucesso!\n\n🎁 Seu desejo: *${presente}*`,
@@ -362,7 +355,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            const participantesData = loadParticipantes();
+            const participantesData = await loadParticipantes();
             if (!participantesData[groupId] || !participantesData[groupId].participantes) {
                 await sock.sendMessage(chatId, {
                     text: "❌ Nenhum participante adicionado ao amigo secreto neste grupo!",
@@ -429,7 +422,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
 
-            const participantesData = loadParticipantes();
+            const participantesData = await loadParticipantes();
             if (!participantesData[chatId] || !participantesData[chatId].participantes) {
                 await sock.sendMessage(chatId, {
                     text: "❌ Nenhum participante adicionado ao amigo secreto ainda!\n\n💡 Use *!amigoSecreto add* primeiro para adicionar participantes.",
@@ -544,7 +537,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             }
         }
         
-        const participantesData = loadParticipantes();
+        const participantesData = await loadParticipantes();
         
         let groupName = "Grupo Desconhecido";
         let groupMetadata = null;
@@ -555,12 +548,16 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
             console.error('Erro ao obter nome do grupo:', error);
         }
         
-        const usersData = loadUsersData();
+        const usersData = await loadUsersData();
         const nomes = {};
         
-        for (const jid of participantesUnicos) {
-            nomes[jid] = getParticipantName(jid, usersData, contactsCache);
-        }
+        participantesUnicos.forEach((jid, index) => {
+            const nomeReal = getParticipantName(jid, usersData, contactsCache);
+            const numero = jid.split('@')[0];
+            nomes[jid] = (nomeReal && nomeReal.trim() && nomeReal !== numero)
+                ? nomeReal
+                : `Participante ${index + 1}`;
+        });
         
         if (!participantesData[chatId]) {
             participantesData[chatId] = {
@@ -578,14 +575,16 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         if (!participantesData[chatId].presentes) {
             participantesData[chatId].presentes = {};
         }
-        saveParticipantes(participantesData);
+        await saveParticipantes(participantesData);
 
         let mensagemConfirmacao = `✅ *Participantes adicionados ao Amigo Secreto!*\n\n`;
         mensagemConfirmacao += `📋 *Total de participantes:* ${participantesUnicos.length}\n\n`;
         mensagemConfirmacao += `👥 *Participantes:*\n`;
         participantesUnicos.forEach((jid, index) => {
-            const nome = nomes[jid] || jid.split('@')[0];
-            mensagemConfirmacao += `${index + 1}. ${nome} (@${jid.split('@')[0]})\n`;
+            const numero = jid.split('@')[0];
+            const nome = nomes[jid];
+            const temNomeReal = nome && nome.trim() && nome !== numero;
+            mensagemConfirmacao += `${index + 1}. ${temNomeReal ? nome + ' (@' + numero + ')' : '@' + numero}\n`;
         });
         mensagemConfirmacao += `\n💡 Use *!amigoSecreto sortear* para realizar o sorteio!`;
 
@@ -595,7 +594,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
 
     } else if (comando === 'sortear') {
-        const participantesData = loadParticipantes();
+        const participantesData = await loadParticipantes();
         const participantes = participantesData[chatId]?.participantes || [];
         const nomes = participantesData[chatId]?.nomes || {};
         const presentes = participantesData[chatId]?.presentes || {};
@@ -618,7 +617,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
 
         participantesData[chatId].sorteio = sorteio;
         participantesData[chatId].sorteioData = new Date().toISOString();
-        saveParticipantes(participantesData);
+        await saveParticipantes(participantesData);
 
         let nomeGrupo = "o grupo";
         try {
@@ -668,8 +667,10 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         mensagemConfirmacao += `\n💬 Todos os participantes receberam no privado quem é seu amigo secreto!\n\n`;
         mensagemConfirmacao += `👥 *Participantes do sorteio:*\n`;
         participantes.forEach((jid, index) => {
-            const nome = nomes[jid] || jid.split('@')[0];
-            mensagemConfirmacao += `${index + 1}. ${nome}\n`;
+            const numero = jid.split('@')[0];
+            const nome = nomes[jid];
+            const temNomeReal = nome && nome.trim() && nome !== numero;
+            mensagemConfirmacao += `${index + 1}. ${temNomeReal ? nome : '@' + numero}\n`;
         });
 
         await sock.sendMessage(chatId, {
@@ -678,7 +679,7 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
         }, { quoted: msg });
 
     } else if (comando === 'lista') {
-        const participantesData = loadParticipantes();
+        const participantesData = await loadParticipantes();
         const participantes = participantesData[chatId]?.participantes || [];
 
         if (participantes.length === 0) {

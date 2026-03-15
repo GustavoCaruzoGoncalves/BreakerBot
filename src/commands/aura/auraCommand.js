@@ -1,9 +1,8 @@
-const fs = require('fs');
 const path = require('path');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const mentionsController = require('../../controllers/mentionsController');
-
-const USERS_LEVELS_PATH = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
+const repo = require('../../database/repository');
+const { levelSystem } = require('../level/levelCommand');
 
 const MISSION_IDS = ['messages_500', 'reactions_500', 'duel_win', 'survive_attack', 'send_media', 'help_someone'];
 const MISSION_CONFIG = {
@@ -111,13 +110,15 @@ async function trySpawnRandomEvent(sock, chatId) {
     await sock.sendMessage(chatId, { text: event.message });
 }
 
-function applyEventEffect(effect, senderAuraKey) {
+async function applyEventEffect(effect, senderAuraKey) {
     if (effect.type === 'aura') {
-        return { type: 'aura', amount: effect.amount, newTotal: auraSystem.addAuraPoints(senderAuraKey, effect.amount) };
+        const newTotal = await auraSystem.addAuraPoints(senderAuraKey, effect.amount);
+        return { type: 'aura', amount: effect.amount, newTotal };
     }
     if (effect.type === 'aura_random') {
         const amount = effect.options[Math.floor(Math.random() * effect.options.length)];
-        return { type: 'aura', amount, newTotal: auraSystem.addAuraPoints(senderAuraKey, amount) };
+        const newTotal = await auraSystem.addAuraPoints(senderAuraKey, amount);
+        return { type: 'aura', amount, newTotal };
     }
     return null;
 }
@@ -132,21 +133,25 @@ function getJidFromNumber(number) {
     return `${number}@s.whatsapp.net`;
 }
 
-function getLevelUserData(number) {
+async function getLevelUserData(number) {
     try {
         const jid = getJidFromNumber(number);
-        if (!jid || !fs.existsSync(USERS_LEVELS_PATH)) return null;
-        const data = JSON.parse(fs.readFileSync(USERS_LEVELS_PATH, 'utf8'));
-        return data[jid] || null;
+        if (!jid) return null;
+        let user = await repo.getUserById(jid);
+        if (!user) {
+            const userId = await repo.findUserByJid(jid);
+            if (userId) user = await repo.getUserById(userId);
+        }
+        return user;
     } catch (e) {
         return null;
     }
 }
 
-function getCanonicalUserKey(jid) {
-    if (!jid || !fs.existsSync(USERS_LEVELS_PATH)) return null;
+async function getCanonicalUserKey(jid) {
+    if (!jid) return null;
     try {
-        const usersData = JSON.parse(fs.readFileSync(USERS_LEVELS_PATH, 'utf8'));
+        const usersData = await repo.getAllUsers();
         if (usersData[jid]) {
             // Se já é uma chave @s.whatsapp.net, ela É a canônica — retorna direto
             if (jid.endsWith('@s.whatsapp.net')) return jid;
@@ -176,11 +181,10 @@ function getCanonicalUserKey(jid) {
     }
 }
 
-function getJidForMention(jid) {
-    const canonical = getCanonicalUserKey(jid) || jid;
+async function getJidForMention(jid) {
+    const canonical = await getCanonicalUserKey(jid) || jid;
     try {
-        if (!fs.existsSync(USERS_LEVELS_PATH)) return canonical;
-        const usersData = JSON.parse(fs.readFileSync(USERS_LEVELS_PATH, 'utf8'));
+        const usersData = await repo.getAllUsers();
         const user = usersData[canonical];
         return (user && user.jid) ? user.jid : canonical;
     } catch (e) {
@@ -188,10 +192,10 @@ function getJidForMention(jid) {
     }
 }
 
-function getAuraKey(jidOrNumber) {
+async function getAuraKey(jidOrNumber) {
     if (!jidOrNumber) return null;
     const jid = typeof jidOrNumber === 'string' && jidOrNumber.includes('@') ? jidOrNumber : getJidFromNumber(jidOrNumber);
-    const canonical = getCanonicalUserKey(jid);
+    const canonical = await getCanonicalUserKey(jid);
     if (canonical) return canonical;
     const num = getUserIdNumber(jid);
     return num ? getJidFromNumber(num) : jid;
@@ -199,22 +203,20 @@ function getAuraKey(jidOrNumber) {
 
 const AURA_GLOBAL_KEY = '__auraGlobal';
 
-function readUsersDataForAura() {
+async function readUsersDataForAura() {
     try {
-        if (fs.existsSync(USERS_LEVELS_PATH)) {
-            return JSON.parse(fs.readFileSync(USERS_LEVELS_PATH, 'utf8'));
-        }
+        return await repo.getAllUsers();
     } catch (error) {
-        console.error('[AURA] Erro ao ler users.json:', error);
+        console.error('[AURA] Erro ao ler users:', error);
+        return {};
     }
-    return {};
 }
 
-function writeUsersDataForAura(usersData) {
+async function writeUsersDataForAura(usersData) {
     try {
-        fs.writeFileSync(USERS_LEVELS_PATH, JSON.stringify(usersData, null, 2));
+        await repo.saveAllUsers(usersData);
     } catch (error) {
-        console.error('[AURA] Erro ao salvar users.json:', error);
+        console.error('[AURA] Erro ao salvar users:', error);
         throw error;
     }
 }
@@ -246,6 +248,14 @@ class AuraSystem {
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     }
 
+    /** Normaliza data para YYYY-MM-DD em horário local (evita reset falso por timezone) */
+    toLocalDateString(val) {
+        if (!val) return null;
+        if (typeof val === 'string') return val.slice(0, 10);
+        const d = new Date(val);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
     drawDailyMissions() {
         const shuffled = [...MISSION_IDS].sort(() => Math.random() - 0.5);
         return shuffled.slice(0, 3);
@@ -254,22 +264,35 @@ class AuraSystem {
     maybeResetDailyMissions(auraObj) {
         const today = this.getTodayDateString();
         const dm = auraObj.dailyMissions;
-        const needsReset = !dm || dm.lastResetDate !== today || !Array.isArray(dm.drawnMissions) || dm.drawnMissions.length !== 3;
-        if (needsReset) {
+        if (!dm) {
             auraObj.dailyMissions = {
                 lastResetDate: today,
                 drawnMissions: this.drawDailyMissions(),
                 completedMissionIds: [],
                 progress: { messages: 0, reactions: 0, duelWin: 0, surviveAttack: 0, media: 0, helpSomeone: 0 }
             };
+            return auraObj;
+        }
+        const lastResetStr = this.toLocalDateString(dm.lastResetDate);
+        const drawnOk = Array.isArray(dm.drawnMissions) && dm.drawnMissions.length === 3;
+        const needsReset = lastResetStr !== today || !drawnOk;
+        if (needsReset) {
+            auraObj.dailyMissions = {
+                lastResetDate: today,
+                drawnMissions: drawnOk && lastResetStr === today ? dm.drawnMissions : this.drawDailyMissions(),
+                completedMissionIds: lastResetStr === today ? (dm.completedMissionIds || []) : [],
+                progress: lastResetStr === today ? (dm.progress || { messages: 0, reactions: 0, duelWin: 0, surviveAttack: 0, media: 0, helpSomeone: 0 }) : { messages: 0, reactions: 0, duelWin: 0, surviveAttack: 0, media: 0, helpSomeone: 0 }
+            };
         }
         return auraObj;
     }
 
     initUser(usersData, number) {
-        if (number === AURA_GLOBAL_KEY || !number || !number.includes('@')) return null;
-        if (!usersData[number]) {
-            usersData[number] = {
+        if (number === AURA_GLOBAL_KEY || number == null) return null;
+        const numStr = typeof number === 'string' ? number : String(number);
+        if (!numStr.includes('@')) return null;
+        if (!usersData[numStr]) {
+            usersData[numStr] = {
                 xp: 0,
                 level: 1,
                 prestige: 0,
@@ -285,53 +308,53 @@ class AuraSystem {
                 pushName: null,
                 customName: null,
                 customNameEnabled: false,
-                jid: number,
+                jid: numStr,
                 profilePicture: null,
                 profilePictureUpdatedAt: null,
                 aura: defaultAuraData()
             };
             const today = this.getTodayDateString();
-            usersData[number].aura.dailyMissions.lastResetDate = today;
-            usersData[number].aura.dailyMissions.drawnMissions = this.drawDailyMissions();
-        } else if (!usersData[number].aura) {
-            usersData[number].aura = defaultAuraData();
-            usersData[number].aura.dailyMissions.lastResetDate = this.getTodayDateString();
-            usersData[number].aura.dailyMissions.drawnMissions = this.drawDailyMissions();
+            usersData[numStr].aura.dailyMissions.lastResetDate = today;
+            usersData[numStr].aura.dailyMissions.drawnMissions = this.drawDailyMissions();
+        } else if (!usersData[numStr].aura) {
+            usersData[numStr].aura = defaultAuraData();
+            usersData[numStr].aura.dailyMissions.lastResetDate = this.getTodayDateString();
+            usersData[numStr].aura.dailyMissions.drawnMissions = this.drawDailyMissions();
         }
-        const aura = usersData[number].aura;
+        const aura = usersData[numStr].aura;
         if (aura.negativeFarmPunished === undefined) aura.negativeFarmPunished = false;
         if (aura.stickerDataUrl === undefined) aura.stickerDataUrl = null;
         this.maybeResetDailyMissions(aura);
         return aura;
     }
 
-    getUserAura(number) {
-        const usersData = readUsersDataForAura();
+    async getUserAura(number) {
+        const usersData = await readUsersDataForAura();
         const before = usersData[number]?.aura?.dailyMissions?.lastResetDate;
         const aura = this.initUser(usersData, number);
         if (!aura) return null;
         const after = aura.dailyMissions.lastResetDate;
-        if (before !== after) writeUsersDataForAura(usersData);
+        if (before !== after) await writeUsersDataForAura(usersData);
         return aura;
     }
 
-    hasMission(number, missionId) {
-        const user = this.getUserAura(number);
+    async hasMission(number, missionId) {
+        const user = await this.getUserAura(number);
         if (!user) return false;
         const drawn = user.dailyMissions?.drawnMissions || [];
         const completed = user.dailyMissions?.completedMissionIds || [];
         return drawn.includes(missionId) && !completed.includes(missionId);
     }
 
-    getProgress(number, missionId) {
-        const user = this.getUserAura(number);
+    async getProgress(number, missionId) {
+        const user = await this.getUserAura(number);
         if (!user) return 0;
         const progKey = missionId === 'messages_500' ? 'messages' : missionId === 'reactions_500' ? 'reactions' : missionId === 'duel_win' ? 'duelWin' : missionId === 'survive_attack' ? 'surviveAttack' : missionId === 'send_media' ? 'media' : 'helpSomeone';
         return (user.dailyMissions?.progress?.[progKey] ?? 0);
     }
 
-    incrementProgress(number, missionId, amount = 1) {
-        const usersData = readUsersDataForAura();
+    async incrementProgress(number, missionId, amount = 1) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         const aura = usersData[number]?.aura;
         if (!aura) return null;
@@ -344,7 +367,7 @@ class AuraSystem {
             completed = missionId;
             this.completeMissionInData(usersData, number, missionId);
         }
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
         return completed ? { completed: missionId, reward: MISSION_CONFIG[missionId]?.reward ?? 0 } : null;
     }
 
@@ -360,56 +383,64 @@ class AuraSystem {
         aura.auraPoints = (aura.auraPoints || 0) + reward;
     }
 
-    completeMission(number, missionId) {
-        const usersData = readUsersDataForAura();
+    async completeMission(number, missionId) {
+        const usersData = await readUsersDataForAura();
         this.completeMissionInData(usersData, number, missionId);
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
         return MISSION_CONFIG[missionId]?.reward ?? 0;
     }
 
-    setStickerHash(number, hash) {
-        const usersData = readUsersDataForAura();
+    async setStickerHash(number, hash) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         if (usersData[number]?.aura) usersData[number].aura.stickerHash = hash;
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
     }
 
-    setStickerData(number, hash, dataUrl) {
-        const usersData = readUsersDataForAura();
+    async setStickerData(number, hash, dataUrl) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         if (usersData[number]?.aura) {
             usersData[number].aura.stickerHash = hash;
             usersData[number].aura.stickerDataUrl = dataUrl || null;
         }
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
     }
 
-    setCharacter(number, character) {
-        const usersData = readUsersDataForAura();
+    async setCharacter(number, character) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         if (usersData[number]?.aura) usersData[number].aura.character = character;
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
     }
 
-    addAuraPoints(number, amount) {
-        const usersData = readUsersDataForAura();
+    async addAuraPoints(number, amount) {
+        const newTotal = await repo.incrementAuraPoints(number, amount);
+        if (newTotal !== null) {
+            levelSystem.invalidateCache();
+            return newTotal;
+        }
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         const aura = usersData[number]?.aura;
         if (!aura) return 0;
-        aura.auraPoints = (aura.auraPoints || 0) + amount;
-        writeUsersDataForAura(usersData);
+        const current = Number(aura.auraPoints) || 0;
+        const added = Number(amount) || 0;
+        aura.auraPoints = Math.max(0, current + added);
+        await writeUsersDataForAura(usersData);
+        levelSystem.invalidateCache();
         return aura.auraPoints;
     }
 
-    transferAura(fromNumber, toNumber, amount) {
-        const usersData = readUsersDataForAura();
+    async transferAura(fromNumber, toNumber, amount) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, fromNumber);
         this.initUser(usersData, toNumber);
         const fromPoints = usersData[fromNumber]?.aura?.auraPoints || 0;
         if (fromPoints < amount) return { ok: false, reason: 'insufficient' };
         usersData[fromNumber].aura.auraPoints = fromPoints - amount;
         usersData[toNumber].aura.auraPoints = (usersData[toNumber].aura.auraPoints || 0) + amount;
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
         return { ok: true, fromRemaining: usersData[fromNumber].aura.auraPoints, toNew: usersData[toNumber].aura.auraPoints };
     }
 
@@ -433,60 +464,60 @@ class AuraSystem {
         return ['stickerMessage', 'imageMessage', 'videoMessage', 'documentMessage'].includes(k);
     }
 
-    getCooldown(number, cooldownKey) {
-        const usersData = readUsersDataForAura();
+    async getCooldown(number, cooldownKey) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         return usersData[number]?.aura?.[cooldownKey];
     }
 
-    setCooldown(number, cooldownKey, value) {
-        const usersData = readUsersDataForAura();
+    async setCooldown(number, cooldownKey, value) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         if (usersData[number]?.aura) usersData[number].aura[cooldownKey] = value;
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
     }
 
-    setNegativeFarmPunished(number, value) {
-        const usersData = readUsersDataForAura();
+    async setNegativeFarmPunished(number, value) {
+        const usersData = await readUsersDataForAura();
         this.initUser(usersData, number);
         if (usersData[number]?.aura) usersData[number].aura.negativeFarmPunished = value;
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
     }
 
-    getPendingMogByChat() {
-        const usersData = readUsersDataForAura();
+    async getPendingMogByChat() {
+        const usersData = await readUsersDataForAura();
         const global = usersData[AURA_GLOBAL_KEY];
         return (global && global.pendingMogByChat) ? global.pendingMogByChat : {};
     }
 
-    setPendingMogByChat(byChat) {
-        const usersData = readUsersDataForAura();
+    async setPendingMogByChat(byChat) {
+        const usersData = await readUsersDataForAura();
         if (!usersData[AURA_GLOBAL_KEY]) usersData[AURA_GLOBAL_KEY] = {};
         usersData[AURA_GLOBAL_KEY].pendingMogByChat = byChat;
-        writeUsersDataForAura(usersData);
+        await writeUsersDataForAura(usersData);
     }
 
-    getPendingMogList(chatId) {
-        const byChat = this.getPendingMogByChat();
+    async getPendingMogList(chatId) {
+        const byChat = await this.getPendingMogByChat();
         return byChat[chatId] || [];
     }
 
-    addPendingMog(chatId, entry) {
-        const byChat = this.getPendingMogByChat();
+    async addPendingMog(chatId, entry) {
+        const byChat = await this.getPendingMogByChat();
         const list = byChat[chatId] || [];
         list.push(entry);
         byChat[chatId] = list;
-        this.setPendingMogByChat(byChat);
+        await this.setPendingMogByChat(byChat);
     }
 
-    clearPendingMogForChat(chatId) {
-        const byChat = this.getPendingMogByChat();
+    async clearPendingMogForChat(chatId) {
+        const byChat = await this.getPendingMogByChat();
         delete byChat[chatId];
-        this.setPendingMogByChat(byChat);
+        await this.setPendingMogByChat(byChat);
     }
 
-    getAuraRanking(limit = 10) {
-        const usersData = readUsersDataForAura();
+    async getAuraRanking(limit = 10) {
+        const usersData = await readUsersDataForAura();
         const entries = [];
         for (const [userId, userData] of Object.entries(usersData)) {
             if (typeof userId !== 'string' || !userId.includes('@') || !userData?.aura) continue;
@@ -504,39 +535,13 @@ class AuraSystem {
 
 const auraSystem = new AuraSystem();
 
-const PRAISED_PATH = path.resolve(__dirname, '..', '..', '..', 'data', 'praised.json');
-
-function readPraised() {
-    try {
-        if (fs.existsSync(PRAISED_PATH)) {
-            return JSON.parse(fs.readFileSync(PRAISED_PATH, 'utf8'));
-        }
-    } catch (e) {
-        console.error('[AURA] Erro ao ler praised.json:', e);
-    }
-    return {};
+async function addPraise(fromAuraKey, toAuraKey) {
+    await repo.addPraise(fromAuraKey, toAuraKey);
 }
 
-function writePraised(data) {
-    try {
-        const dir = path.dirname(PRAISED_PATH);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(PRAISED_PATH, JSON.stringify(data, null, 2));
-    } catch (e) {
-        console.error('[AURA] Erro ao salvar praised.json:', e);
-    }
-}
-
-function addPraise(fromAuraKey, toAuraKey) {
-    const data = readPraised();
-    if (!data[toAuraKey]) data[toAuraKey] = [];
-    data[toAuraKey].push(fromAuraKey);
-    writePraised(data);
-}
-
-function getWhoPraised(targetAuraKey) {
-    const data = readPraised();
-    return data[targetAuraKey] || [];
+async function getWhoPraised(targetAuraKey) {
+    const list = await repo.getWhoPraised(targetAuraKey);
+    return list || [];
 }
 
 function getMentionedJid(msg) {
@@ -546,21 +551,21 @@ function getMentionedJid(msg) {
 }
 
 async function checkAuraNegativeAndPunish(sock, chatId, number, contactsCache) {
-    const user = auraSystem.getUserAura(number);
+    const user = await auraSystem.getUserAura(number);
     if (!user) return;
     const aura = user.auraPoints ?? 0;
     if (aura >= 0) return;
     // Só pode perder aura por farm negativo uma vez
     if (user.negativeFarmPunished) return;
     const jid = number.includes('@') ? number : getJidFromNumber(number);
-    const mentionInfo = mentionsController.processSingleMention(getJidForMention(jid), contactsCache);
+    const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(jid), contactsCache);
     await sock.sendMessage(chatId, {
         text: `${mentionInfo.mentionText} FARMOU AURA NEGATIVA, -1000 AURA 💀💀💀`,
         mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
     });
-    auraSystem.addAuraPoints(number, -1000);
+    await auraSystem.addAuraPoints(number, -1000);
     // Marca que já foi punido por farm negativo — não pode acontecer de novo
-    auraSystem.setNegativeFarmPunished(number, true);
+    await auraSystem.setNegativeFarmPunished(number, true);
 }
 
 async function endMogDuel(sock, chatId, duel, contactsCache = {}) {
@@ -574,17 +579,29 @@ async function endMogDuel(sock, chatId, duel, contactsCache = {}) {
         await sock.sendMessage(chatId, { text: `⏱ Empate! (${countFrom} x ${countTo} mensagens) Ninguém ganha aura.` });
         return;
     }
-    const winnerAuraKey = getAuraKey(winnerKey);
+    const winnerAuraKey = await getAuraKey(winnerKey);
     const winnerCount = winnerKey === fromKey ? countFrom : countTo;
     const loserCount = winnerKey === fromKey ? countTo : countFrom;
-    auraSystem.addAuraPoints(winnerAuraKey, 500);
-    const missionReward = auraSystem.hasMission(winnerAuraKey, 'duel_win') ? auraSystem.completeMission(winnerAuraKey, 'duel_win') : 0;
+    await auraSystem.addAuraPoints(winnerAuraKey, 500);
+    const missionReward = await auraSystem.hasMission(winnerAuraKey, 'duel_win') ? await auraSystem.completeMission(winnerAuraKey, 'duel_win') : 0;
     const totalGain = 500 + missionReward;
-    const winnerMention = mentionsController.processSingleMention(getJidForMention(winnerAuraKey), contactsCache);
+    const winnerMention = await mentionsController.processSingleMention(await getJidForMention(winnerAuraKey), contactsCache);
     await sock.sendMessage(chatId, {
         text: `🏆 Duelo encerrado! ${winnerMention.mentionText} venceu o mog! (${winnerCount} x ${loserCount} mensagens)\n✨ *+500* aura pela vitória${missionReward ? ` + *${missionReward}* pela missão (Vença 1 duelo)` : ''} = *${totalGain}* aura no total.`,
         mentions: winnerMention.mentions?.length ? winnerMention.mentions : undefined
     });
+}
+
+const processedAuraStickerIds = new Set();
+const MAX_AURA_STICKER_IDS = 50000;
+
+function getAuraStickerMessageId(msg) {
+    const id = msg?.key?.id;
+    if (id) return id;
+    const jid = msg?.key?.remoteJid || '';
+    const ts = msg?.messageTimestamp || Date.now();
+    const participant = msg?.key?.participant || msg?.key?.participantAlt || '';
+    return `${jid}_${participant}_${ts}`;
 }
 
 async function auraCommandBot(sock, { messages }, contactsCache = {}) {
@@ -597,7 +614,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     const number = getUserIdNumber(sender);
     if (!number) return;
     if (msg.key.fromMe) return;
-    const senderAuraKey = getAuraKey(sender);
+    const senderAuraKey = await getAuraKey(sender);
 
     const messageType = Object.keys(msg.message)[0];
     const textMessage = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
@@ -613,10 +630,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                     await sock.sendMessage(chatId, { text: '⏳ Esse evento já foi conquistado por alguém!' }, { quoted: msg });
                     return;
                 }
-                const result = applyEventEffect(activeEvent.effect, senderAuraKey);
+                const result = await applyEventEffect(activeEvent.effect, senderAuraKey);
                 activeEvent.winnerKey = senderKey;
                 clearEventTimer(chatId);
-                const winnerMention = mentionsController.processSingleMention(getJidForMention(senderAuraKey), contactsCache);
+                const winnerMention = await mentionsController.processSingleMention(await getJidForMention(senderAuraKey), contactsCache);
                 const emoji = result.amount >= 0 ? '✨' : '💀';
                 await sock.sendMessage(chatId, {
                     text: `${emoji} ${winnerMention.mentionText} ${result.amount >= 0 ? 'ganhou' : 'perdeu'} *${Math.abs(result.amount)}* de aura! Total: *${result.newTotal}*`,
@@ -630,8 +647,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                     return;
                 }
                 activeEvent.participants.add(senderKey);
-                const result = applyEventEffect(activeEvent.effect, senderAuraKey);
-                const participantMention = mentionsController.processSingleMention(getJidForMention(senderAuraKey), contactsCache);
+                const result = await applyEventEffect(activeEvent.effect, senderAuraKey);
+                const participantMention = await mentionsController.processSingleMention(await getJidForMention(senderAuraKey), contactsCache);
                 await sock.sendMessage(chatId, {
                     text: `✨ ${participantMention.mentionText} entrou e ganhou *${result.amount}* de aura! Total: *${result.newTotal}*`,
                     mentions: participantMention.mentions?.length ? participantMention.mentions : undefined
@@ -658,7 +675,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.toLowerCase().trim() === '!mog aceitar') {
-        const list = auraSystem.getPendingMogList(chatId);
+        const list = await auraSystem.getPendingMogList(chatId);
         const senderKey = getCanonicalUserKey(sender) || sender;
         const senderNum = getUserIdNumber(sender);
         const idx = list.findIndex(p => p.toKey === senderKey || getUserIdNumber(p.toKey) === senderNum || getUserIdNumber(p.toJid) === senderNum);
@@ -667,7 +684,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             return;
         }
         const pending = list[idx];
-        auraSystem.clearPendingMogForChat(chatId);
+        await auraSystem.clearPendingMogForChat(chatId);
         const endTime = Date.now() + MOG_DURATION_MS;
         activeMogDuel.set(chatId, {
             fromKey: pending.fromKey,
@@ -698,8 +715,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode mogar a si mesmo.' }, { quoted: msg });
             return;
         }
-        auraSystem.addPendingMog(chatId, { fromKey, toKey, toJid: mentionedJid });
-        const mentionInfo = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
+        await auraSystem.addPendingMog(chatId, { fromKey, toKey, toJid: mentionedJid });
+        const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
         await sock.sendMessage(chatId, {
             text: `⚔️ Desafio de duelo! ${mentionInfo.mentionText} pode aceitar respondendo *!mog aceitar*. Quem mandar mais mensagens em 15 segundos vence e ganha 500 de aura.`,
             mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
@@ -731,7 +748,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 sock.sendMessage(chatId, { text: `${i}` }).catch(() => {});
             }, (MOGNOW_COUNTDOWN_SEC - i) * 1000);
         }
-        const mentionInfo = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
+        const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
         setTimeout(() => {
             sock.sendMessage(chatId, {
                 text: `💀 *MOGNOW!* ${mentionInfo.mentionText} — *15 segundos*: quem mandar *mais mensagens* vence. Alvo ganha 500 de aura (e missão) se vencer; atacante ganha 5 se vencer.`,
@@ -739,29 +756,29 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             }).catch(() => {});
         }, MOGNOW_COUNTDOWN_SEC * 1000);
         mognowActive.set(chatId, { attackerKey, targetKey, gameStartsAt, gameEndsAt, countAttacker: 0, countTarget: 0 });
-        setTimeout(() => {
+        setTimeout(async () => {
             const state = mognowActive.get(chatId);
             if (!state) return;
             mognowActive.delete(chatId);
             const countAttacker = state.countAttacker || 0;
             const countTarget = state.countTarget || 0;
-            const attackerAuraKey = getAuraKey(state.attackerKey);
-            const targetAuraKey = getAuraKey(state.targetKey);
-            const attackerMention = mentionsController.processSingleMention(getJidForMention(attackerAuraKey), contactsCache);
-            const targetMention = mentionsController.processSingleMention(getJidForMention(targetAuraKey), contactsCache);
+            const attackerAuraKey = await getAuraKey(state.attackerKey);
+            const targetAuraKey = await getAuraKey(state.targetKey);
+            const attackerMention = await mentionsController.processSingleMention(await getJidForMention(attackerAuraKey), contactsCache);
+            const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
             const mognowMentions = [];
             if (attackerMention.mentions && attackerMention.mentions.length > 0) mognowMentions.push(...attackerMention.mentions);
             if (targetMention.mentions && targetMention.mentions.length > 0) mognowMentions.push(...targetMention.mentions);
             if (countTarget > countAttacker) {
-                auraSystem.addAuraPoints(targetAuraKey, 500);
-                const missionReward = auraSystem.hasMission(targetAuraKey, 'survive_attack') ? auraSystem.completeMission(targetAuraKey, 'survive_attack') : 0;
+                await auraSystem.addAuraPoints(targetAuraKey, 500);
+                const missionReward = await auraSystem.hasMission(targetAuraKey, 'survive_attack') ? await auraSystem.completeMission(targetAuraKey, 'survive_attack') : 0;
                 const totalGain = 500 + missionReward;
                 sock.sendMessage(chatId, {
                     text: `🛡️ ${targetMention.mentionText} sobreviveu ao ataque! (${countTarget} x ${countAttacker} mensagens)\n✨ *+500* aura${missionReward ? ` + *${missionReward}* pela missão` : ''} = *${totalGain}* aura.`,
                     mentions: mognowMentions.length ? mognowMentions : undefined
                 }).catch(() => {});
             } else if (countAttacker > countTarget) {
-                if (attackerAuraKey) auraSystem.addAuraPoints(attackerAuraKey, 5);
+                if (attackerAuraKey) await auraSystem.addAuraPoints(attackerAuraKey, 5);
                 sock.sendMessage(chatId, {
                     text: `⏱ ${attackerMention.mentionText} venceu o mognow! (${countAttacker} x ${countTarget} mensagens)\n✨ Atacante ganha *5* de aura.`,
                     mentions: mognowMentions.length ? mognowMentions : undefined
@@ -776,8 +793,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     if (textMessage.toLowerCase().trim() === '!meditar') {
         const options = [0, 10, 20, 30, 40, 50];
         const gained = options[Math.floor(Math.random() * options.length)];
-        auraSystem.addAuraPoints(senderAuraKey, gained);
-        const total = auraSystem.getUserAura(senderAuraKey).auraPoints;
+        await auraSystem.addAuraPoints(senderAuraKey, gained);
+        const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
         await sock.sendMessage(chatId, {
             text: gained > 0 ? `🧘 Meditação concluída. Você absorveu *+${gained}* de aura. Total: *${total}*` : `🧘 Meditação concluída. Sua aura permanece estável. Total: *${total}*`
         }, { quoted: msg });
@@ -786,7 +803,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
 
     if (textMessage.toLowerCase().trim() === '!treinar') {
         const TREINAR_COOLDOWN_MS = 60 * 60 * 1000;
-        const lastAt = auraSystem.getCooldown(senderAuraKey, 'lastTreinarAt');
+        const lastAt = await auraSystem.getCooldown(senderAuraKey, 'lastTreinarAt');
         const now = Date.now();
         if (lastAt && now - lastAt < TREINAR_COOLDOWN_MS) {
             const secLeft = Math.ceil((TREINAR_COOLDOWN_MS - (now - lastAt)) / 1000);
@@ -797,22 +814,22 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         }
         const win = Math.random() < 0.5;
         if (win) {
-            auraSystem.addAuraPoints(senderAuraKey, 500);
-            const total = auraSystem.getUserAura(senderAuraKey).auraPoints;
+            await auraSystem.addAuraPoints(senderAuraKey, 500);
+            const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
             await sock.sendMessage(chatId, { text: `💪 Treino intenso! *+500* de aura. Total: *${total}*` }, { quoted: msg });
         } else {
-            auraSystem.addAuraPoints(senderAuraKey, -1000);
-            const total = auraSystem.getUserAura(senderAuraKey).auraPoints;
+            await auraSystem.addAuraPoints(senderAuraKey, -1000);
+            const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
             await sock.sendMessage(chatId, { text: `💔 O treino foi além do limite. *-1000* de aura. Total: *${total}*` }, { quoted: msg });
             await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
         }
-        auraSystem.setCooldown(senderAuraKey, 'lastTreinarAt', now);
+        await auraSystem.setCooldown(senderAuraKey, 'lastTreinarAt', now);
         return;
     }
 
     if (textMessage.toLowerCase().trim() === '!dominar') {
         const DOMINAR_COOLDOWN_MS = 12 * 60 * 60 * 1000;
-        const lastAt = auraSystem.getCooldown(senderAuraKey, 'lastDominarAt');
+        const lastAt = await auraSystem.getCooldown(senderAuraKey, 'lastDominarAt');
         const now = Date.now();
         if (lastAt && now - lastAt < DOMINAR_COOLDOWN_MS) {
             const hoursLeft = ((DOMINAR_COOLDOWN_MS - (now - lastAt)) / (60 * 60 * 1000)).toFixed(1);
@@ -820,10 +837,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             return;
         }
         const won = Math.random() < 0.5;
-        auraSystem.setCooldown(senderAuraKey, 'lastDominarAt', now);
+        await auraSystem.setCooldown(senderAuraKey, 'lastDominarAt', now);
         if (won) {
-            auraSystem.addAuraPoints(senderAuraKey, 1000);
-            const total = auraSystem.getUserAura(senderAuraKey).auraPoints;
+            await auraSystem.addAuraPoints(senderAuraKey, 1000);
+            const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
             await sock.sendMessage(chatId, { text: `👑 Dominação absoluta! *+1000* de aura. Total: *${total}*` }, { quoted: msg });
         } else {
             await sock.sendMessage(chatId, { text: `😤 A dominação falhou. Nenhuma aura obtida.` }, { quoted: msg });
@@ -833,12 +850,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
 
     if (textMessage.toLowerCase().trim() === '!ritual') {
         const today = auraSystem.getTodayDateString();
-        const lastDate = auraSystem.getCooldown(senderAuraKey, 'lastRitualDate');
+        const lastDate = await auraSystem.getCooldown(senderAuraKey, 'lastRitualDate');
         if (lastDate === today) {
             await sock.sendMessage(chatId, { text: `⏳ O ritual só pode ser feito *uma vez por dia*. Volte amanhã.` }, { quoted: msg });
             return;
         }
-        auraSystem.setCooldown(senderAuraKey, 'lastRitualDate', today);
+        await auraSystem.setCooldown(senderAuraKey, 'lastRitualDate', today);
         const ritualLines = [
             `💀🔥 *O ritual começa...* 🔥💀`,
             `💀 A aura emana energias sombrias... 💀`,
@@ -857,12 +874,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const delayEnd = ritualLines.length * 1800 + 800;
         setTimeout(async () => {
             if (won) {
-                auraSystem.addAuraPoints(senderAuraKey, 5000);
-                const total = auraSystem.getUserAura(senderAuraKey).auraPoints;
+                await auraSystem.addAuraPoints(senderAuraKey, 5000);
+                const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
                 await sock.sendMessage(chatId, { text: `👑💀 *O ritual te abençoou.* +5000 de aura. Total: *${total}* 🔥` }).catch(() => {});
             } else {
-                auraSystem.addAuraPoints(senderAuraKey, -5000);
-                const total = auraSystem.getUserAura(senderAuraKey).auraPoints;
+                await auraSystem.addAuraPoints(senderAuraKey, -5000);
+                const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
                 await sock.sendMessage(chatId, { text: `💀🔥 *O ritual te consumiu.* -5000 de aura. Total: *${total}* 💀` }).catch(() => {});
                 await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
             }
@@ -876,20 +893,20 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!respeito* marcando alguém: *!respeito @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = getAuraKey(mentionedJid);
+        const targetAuraKey = await getAuraKey(mentionedJid);
         if (!targetAuraKey || targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode dar respeito a si mesmo.' }, { quoted: msg });
             return;
         }
-        auraSystem.getUserAura(targetAuraKey);
-        const result = auraSystem.transferAura(senderAuraKey, targetAuraKey, 50);
+        await auraSystem.getUserAura(targetAuraKey);
+        const result = await auraSystem.transferAura(senderAuraKey, targetAuraKey, 50);
         if (!result.ok) {
             await sock.sendMessage(chatId, { text: '❌ Você precisa de pelo menos *50* de aura para usar !respeito.' }, { quoted: msg });
             return;
         }
         await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
-        const hadHelpMission = auraSystem.hasMission(senderAuraKey, 'help_someone');
-        if (hadHelpMission) auraSystem.completeMission(senderAuraKey, 'help_someone');
+        const hadHelpMission = await auraSystem.hasMission(senderAuraKey, 'help_someone');
+        if (hadHelpMission) await auraSystem.completeMission(senderAuraKey, 'help_someone');
         await sock.sendMessage(chatId, {
             text: `🙏 Você transferiu *50* de aura como respeito.${hadHelpMission ? ` Missão "Ajude alguém" concluída: *+${MISSION_CONFIG.help_someone.reward}* aura.` : ''}`
         }, { quoted: msg });
@@ -902,16 +919,16 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!elogiar* marcando alguém: *!elogiar @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = getAuraKey(mentionedJid);
+        const targetAuraKey = await getAuraKey(mentionedJid);
         if (!targetAuraKey || targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode elogiar a si mesmo.' }, { quoted: msg });
             return;
         }
-        auraSystem.getUserAura(targetAuraKey);
-        auraSystem.addAuraPoints(targetAuraKey, 100);
-        addPraise(senderAuraKey, targetAuraKey);
-        const senderMention = mentionsController.processSingleMention(getJidForMention(sender), contactsCache);
-        const targetMention = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
+        await auraSystem.getUserAura(targetAuraKey);
+        await auraSystem.addAuraPoints(targetAuraKey, 100);
+        await addPraise(senderAuraKey, targetAuraKey);
+        const senderMention = await mentionsController.processSingleMention(await getJidForMention(sender), contactsCache);
+        const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
         const mentions = [];
         if (senderMention.mentions && senderMention.mentions.length > 0) mentions.push(...senderMention.mentions);
         if (targetMention.mentions && targetMention.mentions.length > 0) mentions.push(...targetMention.mentions);
@@ -932,8 +949,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode provocar a si mesmo.' }, { quoted: msg });
             return;
         }
-        const senderMention = mentionsController.processSingleMention(getJidForMention(sender), contactsCache);
-        const targetMention = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
+        const senderMention = await mentionsController.processSingleMention(await getJidForMention(sender), contactsCache);
+        const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
         const mentions = [];
         if (senderMention.mentions && senderMention.mentions.length > 0) mentions.push(...senderMention.mentions);
         if (targetMention.mentions && targetMention.mentions.length > 0) mentions.push(...targetMention.mentions);
@@ -945,7 +962,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.toLowerCase().trim() === '!elogiados me' || textMessage.toLowerCase().trim().startsWith('!elogiados me ')) {
-        const list = getWhoPraised(senderAuraKey);
+        const list = await getWhoPraised(senderAuraKey);
         const uniqueJids = [...new Set(list)];
         if (uniqueJids.length === 0) {
             await sock.sendMessage(chatId, { text: '📋 Ninguém te elogiou ainda. Use *!elogiar @alguém* para elogiar e dar +100 de aura!' }, { quoted: msg });
@@ -955,7 +972,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const parts = [];
         const allMentions = [];
         for (const jid of jids) {
-            const info = mentionsController.processSingleMention(getJidForMention(jid), contactsCache);
+            const info = await mentionsController.processSingleMention(await getJidForMention(jid), contactsCache);
             parts.push(info.mentionText);
             if (info.mentions && info.mentions.length) allMentions.push(...info.mentions);
         }
@@ -971,10 +988,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!elogiados me* ou *!elogiados @usuario* para ver quem elogiou.' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = getAuraKey(mentionedJid);
-        const list = getWhoPraised(targetAuraKey);
+        const targetAuraKey = await getAuraKey(mentionedJid);
+        const list = await getWhoPraised(targetAuraKey);
         const uniqueJids = [...new Set(list)];
-        const targetMention = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
+        const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
         if (uniqueJids.length === 0) {
             await sock.sendMessage(chatId, {
                 text: `📋 Ninguém elogiou ${targetMention.mentionText} ainda.`,
@@ -986,7 +1003,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const parts = [];
         const allMentions = [...(targetMention.mentions || [])];
         for (const jid of jids) {
-            const info = mentionsController.processSingleMention(getJidForMention(jid), contactsCache);
+            const info = await mentionsController.processSingleMention(await getJidForMention(jid), contactsCache);
             parts.push(info.mentionText);
             if (info.mentions && info.mentions.length) allMentions.push(...info.mentions);
         }
@@ -1009,19 +1026,19 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Informe um valor válido (número inteiro maior que 0). Ex: *!aura doar 100 @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = getAuraKey(mentionedJid);
+        const targetAuraKey = await getAuraKey(mentionedJid);
         if (!targetAuraKey || targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode doar aura para si mesmo.' }, { quoted: msg });
             return;
         }
-        auraSystem.getUserAura(targetAuraKey);
-        const result = auraSystem.transferAura(senderAuraKey, targetAuraKey, amount);
+        await auraSystem.getUserAura(targetAuraKey);
+        const result = await auraSystem.transferAura(senderAuraKey, targetAuraKey, amount);
         if (!result.ok) {
-            const current = auraSystem.getUserAura(senderAuraKey).auraPoints;
+            const current = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
             await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *${amount}* de aura para doar. Seu saldo: *${current}*` }, { quoted: msg });
             return;
         }
-        const targetMention = mentionsController.processSingleMention(getJidForMention(targetAuraKey), contactsCache);
+        const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
         await sock.sendMessage(chatId, {
             text: `💫 Você doou *${amount}* de aura para ${targetMention.mentionText}. Seu saldo: *${result.fromRemaining}*`,
             mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
@@ -1036,7 +1053,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!aura farmar* marcando alguém: *!aura farmar @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = getAuraKey(mentionedJid);
+        const targetAuraKey = await getAuraKey(mentionedJid);
         if (!targetAuraKey || targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode farmar aura de si mesmo.' }, { quoted: msg });
             return;
@@ -1044,17 +1061,17 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         auraSystem.getUserAura(targetAuraKey);
         const success = Math.random() < 0.5;
         if (success) {
-            auraSystem.addAuraPoints(targetAuraKey, -100);
-            auraSystem.addAuraPoints(senderAuraKey, 100);
-            const targetMention = mentionsController.processSingleMention(getJidForMention(mentionedJid), contactsCache);
+            await auraSystem.addAuraPoints(targetAuraKey, -100);
+            await auraSystem.addAuraPoints(senderAuraKey, 100);
+            const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
             await sock.sendMessage(chatId, {
                 text: `🩸 Você farmou *100* de aura de ${targetMention.mentionText}. Você ganhou *+100* de aura.`,
                 mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
             }, { quoted: msg });
             await checkAuraNegativeAndPunish(sock, chatId, targetAuraKey, contactsCache);
         } else {
-            auraSystem.addAuraPoints(senderAuraKey, -200);
-            const total = auraSystem.getUserAura(senderAuraKey).auraPoints;
+            await auraSystem.addAuraPoints(senderAuraKey, -200);
+            const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
             await sock.sendMessage(chatId, { text: `💔 Falhou! Você perdeu *200* de aura. Total: *${total}*` }, { quoted: msg });
             await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
         }
@@ -1071,15 +1088,15 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         else if (senderKey === duel.toKey || (senderNum && senderNum === toNum)) duel.countTo = (duel.countTo || 0) + 1;
     }
 
-    if (auraSystem.hasMission(senderAuraKey, 'messages_500')) {
-        const result = auraSystem.incrementProgress(senderAuraKey, 'messages_500', 1);
+    if (await auraSystem.hasMission(senderAuraKey, 'messages_500')) {
+        const result = await auraSystem.incrementProgress(senderAuraKey, 'messages_500', 1);
         if (result) {
             await sock.sendMessage(chatId, { text: `📬 Missão "Mande 50 mensagens" concluída! *+${result.reward}* aura.` }, { quoted: msg });
         }
     }
 
-    if (auraSystem.isMediaMessage(msg) && auraSystem.hasMission(senderAuraKey, 'send_media')) {
-        const result = auraSystem.incrementProgress(senderAuraKey, 'send_media', 1);
+    if (auraSystem.isMediaMessage(msg) && await auraSystem.hasMission(senderAuraKey, 'send_media')) {
+        const result = await auraSystem.incrementProgress(senderAuraKey, 'send_media', 1);
         if (result) {
             await sock.sendMessage(chatId, { text: `📎 Missão "Envie mídia" concluída! *+${result.reward}* aura.` }, { quoted: msg });
         }
@@ -1112,11 +1129,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 const dataUrl = `data:image/webp;base64,${base64}`;
                 auraSystem.setStickerData(senderAuraKey, hash, dataUrl);
             } else {
-                auraSystem.setStickerHash(senderAuraKey, hash);
+                await auraSystem.setStickerHash(senderAuraKey, hash);
             }
         } catch (err) {
             console.error('[AURA] Erro ao baixar figurinha para base64:', err);
-            auraSystem.setStickerHash(senderAuraKey, hash);
+            await auraSystem.setStickerHash(senderAuraKey, hash);
         }
         await sock.sendMessage(chatId, { text: '✅ Figurinha de aura definida! Use essa figurinha para ter chance de ganhar +100 de aura.' }, { quoted: msg });
         return;
@@ -1131,14 +1148,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             }, { quoted: msg });
             return;
         }
-        auraSystem.setCharacter(senderAuraKey, character);
+        await auraSystem.setCharacter(senderAuraKey, character);
         await sock.sendMessage(chatId, { text: `✅ Personagem definido: *${character}*` }, { quoted: msg });
         return;
     }
 
     const trimmedAura = textMessage.trim();
     if (/^!aura missoes\s*$/i.test(trimmedAura) || /^!aura missões\s*$/i.test(trimmedAura)) {
-        const user = auraSystem.getUserAura(senderAuraKey);
+        const user = await auraSystem.getUserAura(senderAuraKey);
         const drawn = user.dailyMissions?.drawnMissions || [];
         const completed = user.dailyMissions?.completedMissionIds || [];
         const progress = user.dailyMissions?.progress || {};
@@ -1159,7 +1176,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (/^!aura\s+ranking\s*$/i.test(textMessage.trim()) || /^!aura\s+rank\s*$/i.test(textMessage.trim())) {
-        const ranking = auraSystem.getAuraRanking(10);
+        const ranking = await auraSystem.getAuraRanking(10);
         if (ranking.length === 0) {
             await sock.sendMessage(chatId, { text: '📈 Ninguém no ranking de aura ainda. Jogue para acumular pontos!' }, { quoted: msg });
             return;
@@ -1168,7 +1185,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const mentions = [];
         for (let i = 0; i < ranking.length; i++) {
             const r = ranking[i];
-            const mentionInfo = mentionsController.processSingleMention(getJidForMention(r.userId), contactsCache);
+            const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(r.userId), contactsCache);
             mentionTexts.push(mentionInfo.mentionText);
             if (mentionInfo.mentions && mentionInfo.mentions.length) mentions.push(...mentionInfo.mentions);
         }
@@ -1194,16 +1211,18 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!aura info me* para suas informações ou *!aura info @usuario* para ver de alguém.' }, { quoted: msg });
             return;
         }
-        const targetKey = isMe ? senderAuraKey : getAuraKey(mentionedJid);
+        const targetKey = isMe ? senderAuraKey : await getAuraKey(mentionedJid);
         const targetNumber = isMe ? number : getUserIdNumber(targetKey);
-        const user = auraSystem.getUserAura(targetKey);
+        const user = await auraSystem.getUserAura(targetKey);
         if (!user) {
             await sock.sendMessage(chatId, { text: '❌ Não foi possível carregar as informações de aura.' }, { quoted: msg });
             return;
         }
-        const levelUser = getLevelUserData(targetNumber);
-        const mentionInfo = targetKey !== senderAuraKey ? mentionsController.processSingleMention(getJidForMention(targetKey), contactsCache) : null;
-        const displayName = mentionInfo ? mentionInfo.mentionText : (levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || targetKey.split('@')[0]));
+        const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(targetKey), contactsCache);
+        const levelUser = await getLevelUserData(targetNumber);
+        const nameFromDb = levelUser?.customNameEnabled && levelUser?.customName ? levelUser.customName : (levelUser?.pushName || null);
+        const nameFromMsg = isMe ? (msg.pushName || null) : null;
+        const displayName = nameFromDb || nameFromMsg || mentionInfo.mentionText || targetKey.split('@')[0];
         const tier = getAuraTier(user.auraPoints);
         const titleLine = formatNameWithTitle(displayName, user.auraPoints, isGroup);
         const drawn = user.dailyMissions?.drawnMissions || [];
@@ -1223,7 +1242,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         });
         await sock.sendMessage(chatId, {
             text,
-            mentions: mentionInfo && mentionInfo.mentions?.length ? mentionInfo.mentions : undefined
+            mentions: mentionInfo?.mentions?.length ? mentionInfo.mentions : undefined
         }, { quoted: msg });
         return;
     }
@@ -1272,7 +1291,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     if (messageType === 'stickerMessage') {
         const hash = auraSystem.getStickerHashFromMessage(msg);
         if (hash) {
-            const user = auraSystem.getUserAura(senderAuraKey);
+            const user = await auraSystem.getUserAura(senderAuraKey);
             if (user.stickerHash && user.stickerHash === hash) {
                 if (!user.stickerDataUrl) {
                     try {
@@ -1285,7 +1304,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                             if (buffer && Buffer.isBuffer(buffer)) {
                                 const base64 = buffer.toString('base64');
                                 const dataUrl = `data:image/webp;base64,${base64}`;
-                                auraSystem.setStickerData(senderAuraKey, hash, dataUrl);
+                                await auraSystem.setStickerData(senderAuraKey, hash, dataUrl);
                             }
                         }
                     } catch (err) {
@@ -1293,7 +1312,15 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                     }
                 }
                 if (Math.random() < 0.5) {
-                    const newTotal = auraSystem.addAuraPoints(senderAuraKey, 100);
+                    const stickerMsgId = getAuraStickerMessageId(msg);
+                    if (processedAuraStickerIds.has(stickerMsgId)) return;
+                    processedAuraStickerIds.add(stickerMsgId);
+                    if (processedAuraStickerIds.size >= MAX_AURA_STICKER_IDS) {
+                        const arr = [...processedAuraStickerIds];
+                        processedAuraStickerIds.clear();
+                        arr.slice(-MAX_AURA_STICKER_IDS / 2).forEach(id => processedAuraStickerIds.add(id));
+                    }
+                    const newTotal = await auraSystem.addAuraPoints(senderAuraKey, 100);
                     await sock.sendMessage(chatId, { text: `✨ +100 de aura! Total: *${newTotal}*` }, { quoted: msg });
                 }
             }
@@ -1313,9 +1340,9 @@ async function handleAuraReaction(sock, item) {
     if (!sender) return;
     const reactionText = reaction?.text || '';
     if (reactionText !== '💀' && reactionText !== '☠️') return;
-    const senderAuraKey = getAuraKey(sender);
-    if (!senderAuraKey || !auraSystem.hasMission(senderAuraKey, 'reactions_500')) return;
-    const result = auraSystem.incrementProgress(senderAuraKey, 'reactions_500', 1);
+    const senderAuraKey = await getAuraKey(sender);
+    if (!senderAuraKey || !(await auraSystem.hasMission(senderAuraKey, 'reactions_500'))) return;
+    const result = await auraSystem.incrementProgress(senderAuraKey, 'reactions_500', 1);
     if (result) {
         await sock.sendMessage(chatId, {
             text: `💀 Missão "Reaja 20x com 💀 ou ☠️" concluída! *+${result.reward}* aura.`

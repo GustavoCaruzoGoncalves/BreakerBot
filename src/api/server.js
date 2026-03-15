@@ -1,12 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.API_PORT || 3001;
 const HOST = process.env.API_HOST || '0.0.0.0';
+
+const repo = require('../database/repository');
 
 const getAllowedOrigins = () => {
     if (process.env.CORS_ORIGINS) {
@@ -34,7 +34,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Id']
 };
 
 app.use(cors(corsOptions));
@@ -44,20 +44,9 @@ app.use(express.json());
 
 app.set('trust proxy', 1);
 
-const USERS_FILE = path.join(__dirname, '..', '..', 'levels_info', 'users.json');
-const DAILY_BONUS_FILE = path.join(__dirname, '..', '..', 'levels_info', 'daily_bonus.json');
-const MENTIONS_FILE = path.join(__dirname, '..', '..', 'data', 'mentions', 'mentions_preferences.json');
-const BACKUP_FILE = path.join(__dirname, '..', '..', 'data', 'backups', 'deleted_users.json');
-const AUTH_CODES_FILE = path.join(__dirname, '..', '..', 'data', 'auth', 'auth_codes.json');
-const PENDING_MESSAGES_FILE = path.join(__dirname, '..', '..', 'data', 'auth', 'pending_messages.json');
-const SESSIONS_FILE = path.join(__dirname, '..', '..', 'data', 'auth', 'sessions.json');
-const AMIGO_SECRETO_FILE = path.join(__dirname, '..', '..', 'data', 'amigoSecreto', 'participantes.json');
-const PRAISED_FILE = path.join(__dirname, '..', '..', 'data', 'praised.json');
-
 const auraCommand = require('../commands/aura/auraCommand');
 const auraSystem = auraCommand.auraSystem;
 const getAuraKey = auraCommand.getAuraKey;
-const getWhoPraised = auraCommand.getWhoPraised;
 const MISSION_IDS = auraCommand.MISSION_IDS;
 const MISSION_CONFIG = auraCommand.MISSION_CONFIG;
 const RANDOM_EVENTS = auraCommand.RANDOM_EVENTS;
@@ -86,55 +75,6 @@ const getAuraTier = (auraPoints) => {
 };
 
 const isUserKey = (k) => typeof k === 'string' && k.includes('@');
-
-const backupsDir = path.join(__dirname, '..', '..', 'data', 'backups');
-if (!fs.existsSync(backupsDir)) {
-    fs.mkdirSync(backupsDir, { recursive: true });
-}
-
-const authDir = path.join(__dirname, '..', '..', 'data', 'auth');
-if (!fs.existsSync(authDir)) {
-    fs.mkdirSync(authDir, { recursive: true });
-}
-
-if (!fs.existsSync(BACKUP_FILE)) {
-    fs.writeFileSync(BACKUP_FILE, JSON.stringify({ deletedUsers: [] }, null, 2));
-}
-
-if (!fs.existsSync(AUTH_CODES_FILE)) {
-    fs.writeFileSync(AUTH_CODES_FILE, JSON.stringify({}, null, 2));
-}
-
-if (!fs.existsSync(PENDING_MESSAGES_FILE)) {
-    fs.writeFileSync(PENDING_MESSAGES_FILE, JSON.stringify({ pending: [] }, null, 2));
-}
-
-if (!fs.existsSync(SESSIONS_FILE)) {
-    fs.writeFileSync(SESSIONS_FILE, JSON.stringify({}, null, 2));
-}
-
-const readJsonFile = (filePath) => {
-    try {
-        if (!fs.existsSync(filePath)) {
-            return null;
-        }
-        const data = fs.readFileSync(filePath, 'utf8');
-        return JSON.parse(data);
-    } catch (error) {
-        console.error(`Erro ao ler arquivo ${filePath}:`, error);
-        return null;
-    }
-};
-
-const writeJsonFile = (filePath, data) => {
-    try {
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-        return true;
-    } catch (error) {
-        console.error(`Erro ao escrever arquivo ${filePath}:`, error);
-        return false;
-    }
-};
 
 const formatUserId = (id) => {
     let formattedId = id.trim();
@@ -184,22 +124,11 @@ const enrichUserData = (user) => {
     };
 };
 
-const cleanOldBackups = () => {
+const cleanOldBackups = async () => {
     try {
-        const backupData = readJsonFile(BACKUP_FILE);
-        if (!backupData || !backupData.deletedUsers) return;
-
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        const filteredUsers = backupData.deletedUsers.filter(user => {
-            const deletedAt = new Date(user.deletedAt);
-            return deletedAt > thirtyDaysAgo;
-        });
-
-        if (filteredUsers.length !== backupData.deletedUsers.length) {
-            writeJsonFile(BACKUP_FILE, { deletedUsers: filteredUsers });
-            console.log(`[Backup Cleanup] Removidos ${backupData.deletedUsers.length - filteredUsers.length} backups antigos`);
+        const removed = await repo.cleanOldDeletedUsers(30);
+        if (removed > 0) {
+            console.log(`[Backup Cleanup] Removidos ${removed} backups antigos`);
         }
     } catch (error) {
         console.error('Erro ao limpar backups antigos:', error);
@@ -222,22 +151,9 @@ const generateSessionToken = () => {
     return token;
 };
 
-const cleanExpiredCodes = () => {
+const cleanExpiredCodes = async () => {
     try {
-        const authCodes = readJsonFile(AUTH_CODES_FILE) || {};
-        const now = Date.now();
-        let changed = false;
-
-        for (const [userId, data] of Object.entries(authCodes)) {
-            if (data.expiresAt && new Date(data.expiresAt).getTime() < now) {
-                delete authCodes[userId];
-                changed = true;
-            }
-        }
-
-        if (changed) {
-            writeJsonFile(AUTH_CODES_FILE, authCodes);
-        }
+        await repo.cleanExpiredAuthCodes();
     } catch (error) {
         console.error('Erro ao limpar códigos expirados:', error);
     }
@@ -245,7 +161,7 @@ const cleanExpiredCodes = () => {
 
 setInterval(cleanExpiredCodes, 60 * 1000);
 
-app.post('/api/auth/getCode', (req, res) => {
+app.post('/api/auth/getCode', async (req, res) => {
     try {
         const { number } = req.body;
 
@@ -257,9 +173,9 @@ app.post('/api/auth/getCode', (req, res) => {
         }
 
         const userId = formatUserId(number);
-        const users = readJsonFile(USERS_FILE);
+        const user = await repo.getUserById(userId);
 
-        if (!users || !users[userId]) {
+        if (!user) {
             return res.status(404).json({
                 success: false,
                 message: 'Usuário não encontrado na base de dados',
@@ -271,34 +187,15 @@ app.post('/api/auth/getCode', (req, res) => {
         const code = generateAuthCode();
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-        const authCodes = readJsonFile(AUTH_CODES_FILE) || {};
-        authCodes[userId] = {
+        await repo.setAuthCode(userId, {
             code,
             expiresAt,
             attempts: 0,
             createdAt: new Date().toISOString()
-        };
-
-        if (!writeJsonFile(AUTH_CODES_FILE, authCodes)) {
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao salvar código de autenticação'
-            });
-        }
-
-        const pendingMessages = readJsonFile(PENDING_MESSAGES_FILE) || { pending: [] };
-        pendingMessages.pending.push({
-            to: userId,
-            message: `*BreakerBot - Código de Verificação*\n\nSeu código de acesso é: *${code}*\n\nEste código expira em 5 minutos.\n\n_Se você não solicitou este código, ignore esta mensagem._`,
-            createdAt: new Date().toISOString()
         });
 
-        if (!writeJsonFile(PENDING_MESSAGES_FILE, pendingMessages)) {
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao enfileirar mensagem'
-            });
-        }
+        const msg = `*BreakerBot - Código de Verificação*\n\nSeu código de acesso é: *${code}*\n\nEste código expira em 5 minutos.\n\n_Se você não solicitou este código, ignore esta mensagem._`;
+        await repo.addPendingMessage(userId, msg);
 
         res.json({
             success: true,
@@ -315,7 +212,7 @@ app.post('/api/auth/getCode', (req, res) => {
     }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
     try {
         const { number, code } = req.body;
 
@@ -327,20 +224,17 @@ app.post('/api/auth/login', (req, res) => {
         }
 
         const userId = formatUserId(number);
-        const authCodes = readJsonFile(AUTH_CODES_FILE) || {};
+        const authData = await repo.getAuthCode(userId);
 
-        if (!authCodes[userId]) {
+        if (!authData) {
             return res.status(404).json({
                 success: false,
                 message: 'Nenhum código encontrado para este número. Solicite um novo código.'
             });
         }
 
-        const authData = authCodes[userId];
-
         if (new Date(authData.expiresAt).getTime() < Date.now()) {
-            delete authCodes[userId];
-            writeJsonFile(AUTH_CODES_FILE, authCodes);
+            await repo.deleteAuthCode(userId);
             return res.status(401).json({
                 success: false,
                 message: 'Código expirado. Solicite um novo código.'
@@ -348,8 +242,7 @@ app.post('/api/auth/login', (req, res) => {
         }
 
         if (authData.attempts >= 3) {
-            delete authCodes[userId];
-            writeJsonFile(AUTH_CODES_FILE, authCodes);
+            await repo.deleteAuthCode(userId);
             return res.status(429).json({
                 success: false,
                 message: 'Muitas tentativas incorretas. Solicite um novo código.'
@@ -357,43 +250,33 @@ app.post('/api/auth/login', (req, res) => {
         }
 
         if (authData.code !== code) {
-            authCodes[userId].attempts += 1;
-            writeJsonFile(AUTH_CODES_FILE, authCodes);
+            const updated = await repo.incrementAuthCodeAttempts(userId);
             return res.status(401).json({
                 success: false,
                 message: 'Código incorreto',
-                attemptsRemaining: 3 - authCodes[userId].attempts
+                attemptsRemaining: 3 - updated.attempts
             });
         }
 
-        delete authCodes[userId];
-        writeJsonFile(AUTH_CODES_FILE, authCodes);
+        await repo.deleteAuthCode(userId);
 
         const sessionToken = generateSessionToken();
-        const sessions = readJsonFile(SESSIONS_FILE) || {};
-        sessions[sessionToken] = {
-            userId: userId,
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+        await repo.setSession(sessionToken, {
+            userId,
             createdAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        };
+            expiresAt
+        });
 
-        if (!writeJsonFile(SESSIONS_FILE, sessions)) {
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao criar sessão'
-            });
-        }
-
-        const users = readJsonFile(USERS_FILE);
-        const user = users ? enrichUserData(users[userId]) : null;
+        const user = await repo.getUserById(userId);
 
         res.json({
             success: true,
             message: 'Login realizado com sucesso',
             token: sessionToken,
             userId: userId,
-            user: user,
-            expiresAt: sessions[sessionToken].expiresAt
+            user: user ? enrichUserData(user) : null,
+            expiresAt
         });
     } catch (error) {
         console.error('Erro ao fazer login:', error);
@@ -404,7 +287,7 @@ app.post('/api/auth/login', (req, res) => {
     }
 });
 
-app.post('/api/auth/verify', (req, res) => {
+app.post('/api/auth/verify', async (req, res) => {
     try {
         const { token } = req.body;
 
@@ -415,34 +298,30 @@ app.post('/api/auth/verify', (req, res) => {
             });
         }
 
-        const sessions = readJsonFile(SESSIONS_FILE) || {};
+        const session = await repo.getSession(token);
 
-        if (!sessions[token]) {
+        if (!session) {
             return res.status(401).json({
                 success: false,
                 message: 'Token inválido'
             });
         }
 
-        const session = sessions[token];
-
         if (new Date(session.expiresAt).getTime() < Date.now()) {
-            delete sessions[token];
-            writeJsonFile(SESSIONS_FILE, sessions);
+            await repo.deleteSession(token);
             return res.status(401).json({
                 success: false,
                 message: 'Sessão expirada'
             });
         }
 
-        const users = readJsonFile(USERS_FILE);
-        const user = users ? enrichUserData(users[session.userId]) : null;
+        const user = await repo.getUserById(session.userId);
 
         res.json({
             success: true,
             valid: true,
             userId: session.userId,
-            user: user,
+            user: user ? enrichUserData(user) : null,
             expiresAt: session.expiresAt
         });
     } catch (error) {
@@ -454,7 +333,7 @@ app.post('/api/auth/verify', (req, res) => {
     }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
     try {
         const { token } = req.body;
 
@@ -465,12 +344,7 @@ app.post('/api/auth/logout', (req, res) => {
             });
         }
 
-        const sessions = readJsonFile(SESSIONS_FILE) || {};
-
-        if (sessions[token]) {
-            delete sessions[token];
-            writeJsonFile(SESSIONS_FILE, sessions);
-        }
+        await repo.deleteSession(token);
 
         res.json({
             success: true,
@@ -485,21 +359,15 @@ app.post('/api/auth/logout', (req, res) => {
     }
 });
 
-app.get('/api/users', (req, res) => {
+app.get('/api/users', async (req, res) => {
     try {
-        const users = readJsonFile(USERS_FILE);
-        
-        if (!users) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de usuários' 
-            });
-        }
-
-        const usersArray = Object.entries(users).map(([id, data]) => ({
-            id,
-            ...enrichUserData(data)
-        }));
+        const users = await repo.getAllUsers();
+        const usersArray = Object.entries(users)
+            .filter(([id]) => isUserKey(id))
+            .map(([id, data]) => ({
+                id,
+                ...enrichUserData(data)
+            }));
 
         res.json({
             success: true,
@@ -515,19 +383,10 @@ app.get('/api/users', (req, res) => {
     }
 });
 
-app.get('/api/users/:id', (req, res) => {
+app.get('/api/users/:id', async (req, res) => {
     try {
         const userId = formatUserId(req.params.id);
-        const users = readJsonFile(USERS_FILE);
-
-        if (!users) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de usuários' 
-            });
-        }
-
-        const user = users[userId];
+        const user = await repo.getUserById(userId);
 
         if (!user) {
             return res.status(404).json({ 
@@ -552,7 +411,7 @@ app.get('/api/users/:id', (req, res) => {
     }
 });
 
-app.post('/api/users', (req, res) => {
+app.post('/api/users', async (req, res) => {
     try {
         const { id, ...userData } = req.body;
 
@@ -564,54 +423,18 @@ app.post('/api/users', (req, res) => {
         }
 
         const userId = formatUserId(id);
-        const users = readJsonFile(USERS_FILE);
+        const existing = await repo.getUserById(userId);
 
-        if (!users) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de usuários' 
-            });
-        }
-
-        if (users[userId]) {
+        if (existing) {
             return res.status(409).json({ 
                 success: false, 
                 message: 'Usuário já existe na base de dados',
                 userId: userId,
-                existingUser: users[userId]
+                existingUser: existing
             });
         }
 
-        const defaultUserData = {
-            xp: 0,
-            level: 1,
-            prestige: 0,
-            prestigeAvailable: 0,
-            totalMessages: 0,
-            lastMessageTime: new Date().toISOString(),
-            badges: [],
-            lastPrestigeLevel: 0,
-            levelHistory: [],
-            dailyBonusMultiplier: 0,
-            dailyBonusExpiry: null,
-            allowMentions: false,
-            pushName: userData.pushName || null,
-            customName: userData.customName || null,
-            customNameEnabled: userData.customNameEnabled || false,
-            jid: userData.jid || userId,
-            profilePicture: userData.profilePicture || null,
-            profilePictureUpdatedAt: userData.profilePictureUpdatedAt || null
-        };
-
-        const newUser = { ...defaultUserData, ...userData };
-        users[userId] = newUser;
-
-        if (!writeJsonFile(USERS_FILE, users)) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao salvar usuário' 
-            });
-        }
+        const newUser = await repo.createUser(userId, userData);
 
         res.status(201).json({
             success: true,
@@ -628,20 +451,13 @@ app.post('/api/users', (req, res) => {
     }
 });
 
-app.put('/api/users/:id', (req, res) => {
+app.put('/api/users/:id', async (req, res) => {
     try {
         const userId = formatUserId(req.params.id);
         const userData = req.body;
-        const users = readJsonFile(USERS_FILE);
+        const existing = await repo.getUserById(userId);
 
-        if (!users) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de usuários' 
-            });
-        }
-
-        if (!users[userId]) {
+        if (!existing) {
             return res.status(404).json({ 
                 success: false, 
                 message: 'Usuário não encontrado',
@@ -649,20 +465,13 @@ app.put('/api/users/:id', (req, res) => {
             });
         }
 
-        users[userId] = { ...userData };
-
-        if (!writeJsonFile(USERS_FILE, users)) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao atualizar usuário' 
-            });
-        }
+        const user = await repo.updateUser(userId, userData);
 
         res.json({
             success: true,
             message: 'Usuário atualizado com sucesso',
             userId: userId,
-            user: enrichUserData(users[userId])
+            user: enrichUserData(user)
         });
     } catch (error) {
         console.error('Erro ao atualizar usuário:', error);
@@ -673,20 +482,14 @@ app.put('/api/users/:id', (req, res) => {
     }
 });
 
-app.patch('/api/users/:id', (req, res) => {
+app.patch('/api/users/:id', async (req, res) => {
     try {
         const userId = formatUserId(req.params.id);
         const updates = req.body;
-        const users = readJsonFile(USERS_FILE);
+        const { aura, ...userUpdates } = updates;
+        const user = await repo.patchUser(userId, userUpdates);
 
-        if (!users) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de usuários' 
-            });
-        }
-
-        if (!users[userId]) {
+        if (!user) {
             return res.status(404).json({ 
                 success: false, 
                 message: 'Usuário não encontrado',
@@ -694,20 +497,18 @@ app.patch('/api/users/:id', (req, res) => {
             });
         }
 
-        users[userId] = { ...users[userId], ...updates };
-
-        if (!writeJsonFile(USERS_FILE, users)) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao atualizar usuário' 
-            });
+        if (aura && typeof aura === 'object') {
+            const existing = await repo.getUserById(userId);
+            const mergedAura = { ...(existing?.aura || {}), ...aura };
+            await repo.updateAura(userId, mergedAura);
         }
 
+        const updatedUser = await repo.getUserById(userId);
         res.json({
             success: true,
             message: 'Usuário atualizado parcialmente com sucesso',
             userId: userId,
-            user: enrichUserData(users[userId])
+            user: enrichUserData(updatedUser)
         });
     } catch (error) {
         console.error('Erro ao atualizar usuário:', error);
@@ -718,19 +519,12 @@ app.patch('/api/users/:id', (req, res) => {
     }
 });
 
-app.delete('/api/users/:id', (req, res) => {
+app.delete('/api/users/:id', async (req, res) => {
     try {
         const userId = formatUserId(req.params.id);
-        const users = readJsonFile(USERS_FILE);
+        const user = await repo.getUserById(userId);
 
-        if (!users) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de usuários' 
-            });
-        }
-
-        if (!users[userId]) {
+        if (!user) {
             return res.status(404).json({ 
                 success: false, 
                 message: 'Usuário não encontrado',
@@ -738,38 +532,14 @@ app.delete('/api/users/:id', (req, res) => {
             });
         }
 
-        const backupData = readJsonFile(BACKUP_FILE) || { deletedUsers: [] };
-        const deletedUser = {
-            id: userId,
-            data: users[userId],
-            deletedAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-        };
-        
-        backupData.deletedUsers.push(deletedUser);
-        
-        if (!writeJsonFile(BACKUP_FILE, backupData)) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao criar backup do usuário' 
-            });
-        }
-
-        const deletedUserData = users[userId];
-        delete users[userId];
-
-        if (!writeJsonFile(USERS_FILE, users)) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao remover usuário' 
-            });
-        }
+        const deletedUser = await repo.addDeletedUser(userId, user);
+        await repo.deleteUser(userId);
 
         res.json({
             success: true,
             message: 'Usuário removido com sucesso. Backup criado por 30 dias.',
             userId: userId,
-            deletedUser: deletedUserData,
+            deletedUser: user,
             backupExpiresAt: deletedUser.expiresAt
         });
     } catch (error) {
@@ -781,21 +551,72 @@ app.delete('/api/users/:id', (req, res) => {
     }
 });
 
-app.get('/api/backup/users', (req, res) => {
-    try {
-        const backupData = readJsonFile(BACKUP_FILE);
+const isAdminRequest = (req) => {
+    const userId = req.headers['x-user-id'] || req.query.adminUserId;
+    if (!userId) return false;
+    const adminsEnv = process.env.ADMINS;
+    if (!adminsEnv) return false;
+    const admins = adminsEnv.split(',').map(n => `${n.trim()}@s.whatsapp.net`);
+    const normalized = userId.includes('@') ? userId : `${userId}@s.whatsapp.net`;
+    return admins.includes(normalized);
+};
 
-        if (!backupData) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de backup' 
-            });
+app.get('/api/admin/users/export', async (req, res) => {
+    if (!isAdminRequest(req)) {
+        return res.status(403).json({ success: false, message: 'Acesso negado. Apenas administradores.' });
+    }
+    try {
+        const users = await repo.getAllUsers();
+        const exportData = {};
+        for (const [key, val] of Object.entries(users)) {
+            if (key === '__auraGlobal' || key === 'pendingMogByChat') continue;
+            if (typeof key !== 'string' || !key.includes('@')) continue;
+            if (val && typeof val === 'object') exportData[key] = val;
         }
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename="users-export.json"');
+        res.send(JSON.stringify(exportData, null, 2));
+    } catch (error) {
+        console.error('Erro ao exportar usuários:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao exportar' });
+    }
+});
+
+app.post('/api/admin/users/import', async (req, res) => {
+    if (!isAdminRequest(req)) {
+        return res.status(403).json({ success: false, message: 'Acesso negado. Apenas administradores.' });
+    }
+    try {
+        const data = req.body;
+        if (!data || typeof data !== 'object') {
+            return res.status(400).json({ success: false, message: 'JSON inválido. Envie um objeto com usuários.' });
+        }
+        const usersData = {};
+        for (const [key, val] of Object.entries(data)) {
+            if (key === '__auraGlobal' || key === 'pendingMogByChat') continue;
+            if (typeof key !== 'string' || !key.includes('@')) continue;
+            if (val && typeof val === 'object') usersData[key] = val;
+        }
+        await repo.saveAllUsers(usersData);
+        res.json({
+            success: true,
+            message: 'Importação concluída com sucesso',
+            imported: Object.keys(usersData).length
+        });
+    } catch (error) {
+        console.error('Erro ao importar usuários:', error);
+        res.status(500).json({ success: false, message: error.message || 'Erro ao importar' });
+    }
+});
+
+app.get('/api/backup/users', async (req, res) => {
+    try {
+        const backups = await repo.getDeletedUsers();
 
         res.json({
             success: true,
-            count: backupData.deletedUsers.length,
-            backups: backupData.deletedUsers
+            count: backups.length,
+            backups
         });
     } catch (error) {
         console.error('Erro ao listar backups:', error);
@@ -806,22 +627,13 @@ app.get('/api/backup/users', (req, res) => {
     }
 });
 
-app.post('/api/backup/restore/:id', (req, res) => {
+app.post('/api/backup/restore/:id', async (req, res) => {
     try {
         const userId = formatUserId(req.params.id);
-        const backupData = readJsonFile(BACKUP_FILE);
-        const users = readJsonFile(USERS_FILE);
+        const backups = await repo.getDeletedUsers();
+        const backupEntry = backups.find(u => u.id === userId);
 
-        if (!backupData || !users) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivos' 
-            });
-        }
-
-        const backupIndex = backupData.deletedUsers.findIndex(u => u.id === userId);
-
-        if (backupIndex === -1) {
+        if (!backupEntry) {
             return res.status(404).json({ 
                 success: false, 
                 message: 'Usuário não encontrado no backup',
@@ -829,7 +641,8 @@ app.post('/api/backup/restore/:id', (req, res) => {
             });
         }
 
-        if (users[userId]) {
+        const existing = await repo.getUserById(userId);
+        if (existing) {
             return res.status(409).json({ 
                 success: false, 
                 message: 'Usuário já existe na base de dados. Delete-o primeiro se quiser restaurar.',
@@ -837,23 +650,17 @@ app.post('/api/backup/restore/:id', (req, res) => {
             });
         }
 
-        const restoredUser = backupData.deletedUsers[backupIndex];
-        users[userId] = restoredUser.data;
+        const userData = backupEntry.data;
+        await repo.restoreUser(userId, userData);
+        await repo.removeDeletedUser(userId);
 
-        backupData.deletedUsers.splice(backupIndex, 1);
-
-        if (!writeJsonFile(USERS_FILE, users) || !writeJsonFile(BACKUP_FILE, backupData)) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao restaurar usuário' 
-            });
-        }
+        const user = await repo.getUserById(userId);
 
         res.json({
             success: true,
             message: 'Usuário restaurado com sucesso',
             userId: userId,
-            user: users[userId]
+            user
         });
     } catch (error) {
         console.error('Erro ao restaurar usuário:', error);
@@ -864,20 +671,13 @@ app.post('/api/backup/restore/:id', (req, res) => {
     }
 });
 
-app.get('/api/daily-bonus', (req, res) => {
+app.get('/api/daily-bonus', async (req, res) => {
     try {
-        const dailyBonus = readJsonFile(DAILY_BONUS_FILE);
-
-        if (!dailyBonus) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de bônus diário' 
-            });
-        }
+        const dailyBonus = await repo.getDailyBonus();
 
         res.json({
             success: true,
-            dailyBonus: dailyBonus
+            dailyBonus
         });
     } catch (error) {
         console.error('Erro ao buscar bônus diário:', error);
@@ -888,20 +688,13 @@ app.get('/api/daily-bonus', (req, res) => {
     }
 });
 
-app.get('/api/mentions', (req, res) => {
+app.get('/api/mentions', async (req, res) => {
     try {
-        const mentions = readJsonFile(MENTIONS_FILE);
-
-        if (!mentions) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao ler arquivo de menções' 
-            });
-        }
+        const mentions = await repo.getMentionsPreferences();
 
         res.json({
             success: true,
-            mentions: mentions
+            mentions
         });
     } catch (error) {
         console.error('Erro ao buscar menções:', error);
@@ -912,21 +705,15 @@ app.get('/api/mentions', (req, res) => {
     }
 });
 
-app.put('/api/mentions', (req, res) => {
+app.put('/api/mentions', async (req, res) => {
     try {
         const mentionsData = req.body;
-
-        if (!writeJsonFile(MENTIONS_FILE, mentionsData)) {
-            return res.status(500).json({ 
-                success: false, 
-                message: 'Erro ao atualizar menções' 
-            });
-        }
+        const mentions = await repo.updateMentionsPreferences(mentionsData);
 
         res.json({
             success: true,
             message: 'Preferências de menções atualizadas',
-            mentions: mentionsData
+            mentions
         });
     } catch (error) {
         console.error('Erro ao atualizar menções:', error);
@@ -969,16 +756,9 @@ app.get('/api/admins', (req, res) => {
     }
 });
 
-app.get('/api/amigo-secreto', (req, res) => {
+app.get('/api/amigo-secreto', async (req, res) => {
     try {
-        const amigoSecreto = readJsonFile(AMIGO_SECRETO_FILE);
-
-        if (!amigoSecreto) {
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao ler arquivo do amigo secreto'
-            });
-        }
+        const amigoSecreto = await repo.getAmigoSecretoAll();
 
         const groups = Object.entries(amigoSecreto).map(([groupId, data]) => ({
             groupId,
@@ -995,7 +775,7 @@ app.get('/api/amigo-secreto', (req, res) => {
         res.json({
             success: true,
             count: groups.length,
-            groups: groups
+            groups
         });
     } catch (error) {
         console.error('Erro ao buscar amigo secreto:', error);
@@ -1006,7 +786,7 @@ app.get('/api/amigo-secreto', (req, res) => {
     }
 });
 
-app.get('/api/amigo-secreto/user/:id', (req, res) => {
+app.get('/api/amigo-secreto/user/:id', async (req, res) => {
     try {
         let searchId = req.params.id.trim();
         
@@ -1014,15 +794,8 @@ app.get('/api/amigo-secreto/user/:id', (req, res) => {
             searchId = `${searchId}@s.whatsapp.net`;
         }
 
-        const amigoSecreto = readJsonFile(AMIGO_SECRETO_FILE);
-        const users = readJsonFile(USERS_FILE);
-
-        if (!amigoSecreto) {
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao ler arquivo do amigo secreto'
-            });
-        }
+        const amigoSecreto = await repo.getAmigoSecretoAll();
+        const users = await repo.getAllUsers();
 
         let userIds = [searchId];
 
@@ -1032,7 +805,7 @@ app.get('/api/amigo-secreto/user/:id', (req, res) => {
             }
             
             for (const [oderId, userData] of Object.entries(users)) {
-                if (userData.jid === searchId) {
+                if (userData && userData.jid === searchId) {
                     userIds.push(oderId);
                 }
             }
@@ -1102,7 +875,7 @@ app.get('/api/amigo-secreto/user/:id', (req, res) => {
     }
 });
 
-app.patch('/api/amigo-secreto/:groupId/presente', (req, res) => {
+app.patch('/api/amigo-secreto/:groupId/presente', async (req, res) => {
     try {
         const { groupId } = req.params;
         const { odI, presente } = req.body;
@@ -1119,14 +892,7 @@ app.patch('/api/amigo-secreto/:groupId/presente', (req, res) => {
             userIdFormatado = `${userIdFormatado}@s.whatsapp.net`;
         }
 
-        const amigoSecreto = readJsonFile(AMIGO_SECRETO_FILE);
-
-        if (!amigoSecreto) {
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao ler arquivo do amigo secreto'
-            });
-        }
+        const amigoSecreto = await repo.getAmigoSecretoAll();
 
         if (!amigoSecreto[groupId]) {
             return res.status(404).json({
@@ -1136,7 +902,7 @@ app.patch('/api/amigo-secreto/:groupId/presente', (req, res) => {
         }
 
         const group = amigoSecreto[groupId];
-        const users = readJsonFile(USERS_FILE);
+        const users = await repo.getAllUsers();
         
         let participantId = null;
         
@@ -1162,22 +928,7 @@ app.patch('/api/amigo-secreto/:groupId/presente', (req, res) => {
             });
         }
 
-        if (!group.presentes) {
-            group.presentes = {};
-        }
-
-        if (presente.trim() === '') {
-            delete group.presentes[participantId];
-        } else {
-            group.presentes[participantId] = presente.trim();
-        }
-
-        if (!writeJsonFile(AMIGO_SECRETO_FILE, amigoSecreto)) {
-            return res.status(500).json({
-                success: false,
-                message: 'Erro ao salvar presente'
-            });
-        }
+        await repo.updateAmigoSecretoPresente(groupId, participantId, presente.trim() === '' ? '' : presente.trim());
 
         res.json({
             success: true,
@@ -1196,13 +947,10 @@ app.patch('/api/amigo-secreto/:groupId/presente', (req, res) => {
     }
 });
 
-app.get('/api/aura/ranking', (req, res) => {
+app.get('/api/aura/ranking', async (req, res) => {
     try {
         const limit = Math.min(parseInt(req.query.limit, 10) || 10, 100);
-        const users = readJsonFile(USERS_FILE);
-        if (!users) {
-            return res.status(500).json({ success: false, message: 'Erro ao ler usuários' });
-        }
+        const users = await repo.getAllUsers();
         const entries = [];
         for (const [userId, data] of Object.entries(users)) {
             if (!isUserKey(userId) || !data?.aura) continue;
@@ -1229,18 +977,15 @@ app.get('/api/aura/ranking', (req, res) => {
     }
 });
 
-app.get('/api/aura/users/:id', (req, res) => {
+app.get('/api/aura/users/:id', async (req, res) => {
     try {
         const requestedId = formatUserId(req.params.id);
-        const users = readJsonFile(USERS_FILE);
-        if (!users) {
-            return res.status(500).json({ success: false, message: 'Erro ao ler usuários' });
-        }
+        const users = await repo.getAllUsers();
         let userId = requestedId;
         let user = users[userId];
         if (!user) {
             for (const [uid, data] of Object.entries(users)) {
-                if (!isUserKey(uid)) continue;
+                if (!isUserKey(uid) || !data) continue;
                 if (data.jid === requestedId || uid === requestedId) {
                     user = data;
                     userId = uid;
@@ -1271,8 +1016,8 @@ app.get('/api/aura/users/:id', (req, res) => {
         };
         const tier = getAuraTier(aura.auraPoints ?? 0);
         const displayName = user.customNameEnabled && user.customName ? user.customName : (user.pushName || userId.split('@')[0]);
-        const auraKey = getAuraKey(userId);
-        const praisedBy = auraKey ? (getWhoPraised(auraKey) || []) : [];
+        const auraKey = await getAuraKey(userId);
+        const praisedBy = auraKey ? (await repo.getWhoPraised(auraKey) || []) : [];
         res.json({
             success: true,
             userId,
@@ -1335,11 +1080,9 @@ app.get('/api/aura/config', (req, res) => {
     }
 });
 
-app.get('/api/aura/global', (req, res) => {
+app.get('/api/aura/global', async (req, res) => {
     try {
-        const users = readJsonFile(USERS_FILE);
-        const globalKey = '__auraGlobal';
-        const global = (users && users[globalKey]) ? users[globalKey] : {};
+        const global = await repo.getAuraGlobal();
         res.json({
             success: true,
             pendingMogByChat: global.pendingMogByChat ?? {}
@@ -1350,9 +1093,9 @@ app.get('/api/aura/global', (req, res) => {
     }
 });
 
-app.get('/api/aura/praised', (req, res) => {
+app.get('/api/aura/praised', async (req, res) => {
     try {
-        const praised = readJsonFile(PRAISED_FILE) || {};
+        const praised = await repo.getAllPraised();
         res.json({
             success: true,
             praised
@@ -1409,19 +1152,18 @@ function calcSlotWin(reels, bet) {
     return totalWin;
 }
 
-app.post('/api/aura/slot', (req, res) => {
+app.post('/api/aura/slot', async (req, res) => {
     try {
         const { token, bet } = req.body;
         if (!token) {
             return res.status(401).json({ success: false, message: 'Token é obrigatório' });
         }
-        const sessions = readJsonFile(SESSIONS_FILE) || {};
-        const session = sessions[token];
+        const session = await repo.getSession(token);
         if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
             return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
         }
         const userId = session.userId;
-        const auraKey = getAuraKey(userId);
+        const auraKey = await getAuraKey(userId);
         if (!auraKey) {
             return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
         }
@@ -1432,7 +1174,7 @@ app.post('/api/aura/slot', (req, res) => {
                 message: 'Aposta mínima: 1 aura'
             });
         }
-        const userAura = auraSystem.getUserAura(auraKey);
+        const userAura = await auraSystem.getUserAura(auraKey);
         const balance = userAura?.auraPoints ?? 0;
         if (balance < betAmount) {
             return res.status(400).json({
@@ -1441,7 +1183,7 @@ app.post('/api/aura/slot', (req, res) => {
                 balance
             });
         }
-        auraSystem.addAuraPoints(auraKey, -betAmount);
+        await auraSystem.addAuraPoints(auraKey, -betAmount);
         const reels = [
             [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()],
             [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()],
@@ -1450,7 +1192,7 @@ app.post('/api/aura/slot', (req, res) => {
         const winAmount = calcSlotWin(reels, betAmount);
         const netChange = winAmount - betAmount;
         if (netChange > 0) {
-            auraSystem.addAuraPoints(auraKey, netChange);
+            await auraSystem.addAuraPoints(auraKey, netChange);
         }
         const newBalance = balance - betAmount + winAmount;
         res.json({
@@ -1467,7 +1209,7 @@ app.post('/api/aura/slot', (req, res) => {
     }
 });
 
-app.post('/api/aura/game-reward', (req, res) => {
+app.post('/api/aura/game-reward', async (req, res) => {
     try {
         const { token, game, score } = req.body;
         if (!token) {
@@ -1480,21 +1222,20 @@ app.post('/api/aura/game-reward', (req, res) => {
         if (Number.isNaN(scoreNum)) {
             return res.status(400).json({ success: false, message: 'Dados inválidos' });
         }
-        const sessions = readJsonFile(SESSIONS_FILE) || {};
-        const session = sessions[token];
+        const session = await repo.getSession(token);
         if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
             return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
         }
         const userId = session.userId;
-        const auraKey = getAuraKey(userId);
+        const auraKey = await getAuraKey(userId);
         if (!auraKey) {
             return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
         }
         const reward = Math.floor(scoreNum);
         if (reward !== 0) {
-            auraSystem.addAuraPoints(auraKey, reward);
+            await auraSystem.addAuraPoints(auraKey, reward);
         }
-        const userAura = auraSystem.getUserAura(auraKey);
+        const userAura = await auraSystem.getUserAura(auraKey);
         const balance = userAura?.auraPoints ?? 0;
         res.json({
             success: true,
@@ -1569,15 +1310,25 @@ app.get('/', (req, res) => {
     });
 });
 
-app.listen(PORT, HOST, () => {
-    console.log(`\n========================================`);
-    console.log(`  BreakerBot API - ${process.env.NODE_ENV || 'development'}`);
-    console.log(`========================================`);
-    console.log(`  Host: ${HOST}`);
-    console.log(`  Porta: ${PORT}`);
-    console.log(`  CORS: ${process.env.CORS_ORIGINS || 'localhost apenas'}`);
-    console.log(`  Documentação: http://localhost:${PORT}/`);
-    console.log(`========================================\n`);
-});
+const { initDatabase } = require('../database/init');
+
+async function startApi() {
+    const initOk = await initDatabase();
+    if (!initOk) {
+        console.warn('[DB] Init falhou - a API iniciará, mas funcionalidades que usam o banco podem não funcionar.');
+    }
+    app.listen(PORT, HOST, () => {
+        console.log(`\n========================================`);
+        console.log(`  BreakerBot API - ${process.env.NODE_ENV || 'development'}`);
+        console.log(`========================================`);
+        console.log(`  Host: ${HOST}`);
+        console.log(`  Porta: ${PORT}`);
+        console.log(`  CORS: ${process.env.CORS_ORIGINS || 'localhost apenas'}`);
+        console.log(`  Documentação: http://localhost:${PORT}/`);
+        console.log(`========================================\n`);
+    });
+}
+
+startApi();
 
 module.exports = app;

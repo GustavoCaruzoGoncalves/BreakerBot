@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { admins } = require('../../config/adm');
+const repo = require('../../database/repository');
 
 async function sendJsCommandBot(sock, { messages }) {
     const msg = messages[0];
@@ -68,22 +69,14 @@ async function sendJsCommandBot(sock, { messages }) {
         }
 
         try {
-            const filePath = path.resolve(__dirname, '..', '..', '..', 'levels_info', 'users.json');
-            
-            if (!fs.existsSync(filePath)) {
-                await sock.sendMessage(chatId, {
-                    text: "❌ Arquivo users.json não encontrado!",
-                }, { quoted: msg });
-                return;
-            }
-
-            const fileContent = fs.readFileSync(filePath, 'utf8');
+            const usersData = await repo.getAllUsers();
+            const fileContent = JSON.stringify(usersData, null, 2);
             
             await sock.sendMessage(chatId, {
                 document: Buffer.from(fileContent, 'utf8'),
                 fileName: 'users.json',
                 mimetype: 'application/json',
-                caption: '📊 Arquivo users.json (dados dos usuários) enviado por comando !sendJson'
+                caption: '📊 Dados dos usuários (banco de dados) enviado por comando !sendJson'
             }, { quoted: msg });
 
             console.log(`[SUCCESS] Arquivo users.json enviado para ${chatId}`);
