@@ -40,7 +40,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 app.options('*', cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 app.set('trust proxy', 1);
 
@@ -413,7 +413,8 @@ app.get('/api/users/:id', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
     try {
-        const { id, ...userData } = req.body;
+        const body = req.body || {};
+        const { id, ...userData } = body;
 
         if (!id) {
             return res.status(400).json({ 
@@ -422,7 +423,7 @@ app.post('/api/users', async (req, res) => {
             });
         }
 
-        const userId = formatUserId(id);
+        const userId = formatUserId(String(id).trim());
         const existing = await repo.getUserById(userId);
 
         if (existing) {
@@ -440,13 +441,13 @@ app.post('/api/users', async (req, res) => {
             success: true,
             message: 'Usuário criado com sucesso',
             userId: userId,
-            user: newUser
+            user: enrichUserData(newUser)
         });
     } catch (error) {
         console.error('Erro ao criar usuário:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Erro interno do servidor' 
+            message: error.message || 'Erro interno do servidor' 
         });
     }
 });
@@ -484,8 +485,8 @@ app.put('/api/users/:id', async (req, res) => {
 
 app.patch('/api/users/:id', async (req, res) => {
     try {
-        const userId = formatUserId(req.params.id);
-        const updates = req.body;
+        const userId = formatUserId(String(req.params.id || '').trim());
+        const updates = req.body || {};
         const { aura, ...userUpdates } = updates;
         const user = await repo.patchUser(userId, userUpdates);
 
@@ -514,7 +515,7 @@ app.patch('/api/users/:id', async (req, res) => {
         console.error('Erro ao atualizar usuário:', error);
         res.status(500).json({ 
             success: false, 
-            message: 'Erro interno do servidor' 
+            message: error.message || 'Erro interno do servidor' 
         });
     }
 });

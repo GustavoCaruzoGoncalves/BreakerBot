@@ -752,24 +752,32 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         processedMessageIds.add(msgId);
 
         const sender = isGroup ? (m.key.participantAlt || m.key.participant || chatId) : chatId;
-        const userJid = m.key.participantAlt || m.key.participant || sender;
+        const participantJid = m.key.participantAlt || m.key.participant || sender;
         const pushName = m.pushName || contactsCache[sender]?.notify || contactsCache[sender]?.name || null;
         const jidToSave = isGroup ? (m.key.participant || null) : (m.key.remoteJidAlt || null);
+
+        const usersData = await levelSystem.getOrLoadCache();
+        const canonicalUserId = levelSystem.findUserKey(usersData, participantJid)
+            || (participantJid.endsWith('@lid') ? await repo.findUserByJid(participantJid) : null)
+            || participantJid;
+        const userJid = canonicalUserId;
 
         const isDailyBonus = await levelSystem.checkDailyBonus(userJid, pushName, true);
         const xpResult = await levelSystem.addXPToCache(userJid, 10, isDailyBonus, pushName);
 
-        const usersData = await levelSystem.getOrLoadCache();
         if (!usersData[userJid]) {
             usersData[userJid] = {
                 xp: 0, level: 1, prestige: 0, prestigeAvailable: 0, totalMessages: 0,
                 lastMessageTime: null, badges: [], lastPrestigeLevel: 0, levelHistory: [],
                 dailyBonusMultiplier: 0, dailyBonusExpiry: null, allowMentions: false,
                 pushName: pushName || null, customName: null, customNameEnabled: false,
-                jid: jidToSave || userJid, profilePicture: null, profilePictureUpdatedAt: null
+                jid: (jidToSave && !jidToSave.endsWith('@lid')) ? jidToSave : userJid,
+                profilePicture: null, profilePictureUpdatedAt: null
             };
         } else {
-            if (jidToSave && (!usersData[userJid].jid || usersData[userJid].jid !== jidToSave)) usersData[userJid].jid = jidToSave;
+            if (jidToSave && !jidToSave.endsWith('@lid')) {
+                if (!usersData[userJid].jid || usersData[userJid].jid !== jidToSave) usersData[userJid].jid = jidToSave;
+            }
             if (pushName && (!usersData[userJid].pushName || usersData[userJid].pushName !== pushName)) usersData[userJid].pushName = pushName;
         }
 
@@ -993,6 +1001,7 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         let rankingMessage = `🏆 *Ranking Top 10* 🏆\n\n`;
         const userIds = ranking.map(user => user.userId);
         
+        const globalMentionsEnabled = await mentionsController.getMentionsEnabled();
         const mentionTexts = [];
         const mentions = [];
         
@@ -1001,7 +1010,8 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
             const userJidForMention = (user.jid && user.jid.endsWith('@lid')) ? user.userId : (user.jid || user.userId);
             const mentionInfo = await mentionsController.processSingleMention(userJidForMention, contactsCache);
             mentionTexts.push(mentionInfo.mentionText);
-            if (mentionInfo.mentions.length > 0) {
+            const canMention = globalMentionsEnabled && (user.allowMentions === true);
+            if (canMention && mentionInfo.mentions && mentionInfo.mentions.length > 0) {
                 mentions.push(...mentionInfo.mentions);
             }
         }

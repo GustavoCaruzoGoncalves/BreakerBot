@@ -183,7 +183,7 @@ async function getAllUsers() {
  */
 async function getLevelRanking(limit = 10) {
     const r = await query(
-        `SELECT u.user_id AS "userId", u.xp, u.level, u.prestige, u.jid
+        `SELECT u.user_id AS "userId", u.xp, u.level, u.prestige, u.jid, u.allow_mentions AS "allowMentions"
          FROM users u
          WHERE u.user_id NOT LIKE '%@g.us'
          ORDER BY u.prestige DESC, u.level DESC, u.xp DESC
@@ -195,7 +195,8 @@ async function getLevelRanking(limit = 10) {
         xp: row.xp ?? 0,
         level: row.level ?? 1,
         prestige: row.prestige ?? 0,
-        jid: row.jid ?? row.userId
+        jid: row.jid ?? row.userId,
+        allowMentions: row.allowMentions === true
     }));
 }
 
@@ -204,7 +205,7 @@ async function getLevelRanking(limit = 10) {
  */
 async function getAuraRanking(limit = 10) {
     const r = await query(
-        `SELECT u.user_id AS "userId", COALESCE(a.aura_points, 0) AS "auraPoints", u.jid
+        `SELECT u.user_id AS "userId", COALESCE(a.aura_points, 0) AS "auraPoints", u.jid, u.allow_mentions AS "allowMentions"
          FROM users u
          LEFT JOIN aura a ON a.user_id = u.user_id
          WHERE u.user_id NOT LIKE '%@g.us'
@@ -215,7 +216,8 @@ async function getAuraRanking(limit = 10) {
     return r.rows.map(row => ({
         userId: row.userId,
         auraPoints: Number(row.auraPoints) ?? 0,
-        jid: row.jid ?? row.userId
+        jid: row.jid ?? row.userId,
+        allowMentions: row.allowMentions === true
     }));
 }
 
@@ -292,6 +294,12 @@ async function createUser(userId, userData) {
 
 async function updateUser(userId, userData) {
     const d = camelToDb(userData);
+    const existing = await getUserById(userId);
+    if (existing && d.jid !== undefined && d.jid && d.jid.endsWith('@lid')) {
+        if (existing.jid && existing.jid.endsWith('@s.whatsapp.net')) {
+            delete d.jid;
+        }
+    }
     const keys = ['xp', 'level', 'prestige', 'prestige_available', 'total_messages', 'last_message_time',
         'last_prestige_level', 'daily_bonus_multiplier', 'daily_bonus_expiry',
         'allow_mentions', 'push_name', 'custom_name', 'custom_name_enabled', 'jid', 'profile_picture', 'profile_picture_updated_at',
@@ -436,12 +444,25 @@ async function updateAura(userId, auraData) {
     }
 }
 
+/**
+ * Campos de preferência do usuário (editáveis pelo site). Ao salvar via saveAllUsers
+ * (usado pelo bot com cache), preservamos os valores do DB para não sobrescrever
+ * alterações feitas pelo painel web.
+ */
+const PREFERENCE_FIELDS = ['allowMentions', 'pushName', 'customName', 'customNameEnabled'];
+
 async function saveAllUsers(usersData) {
     for (const [userId, userData] of Object.entries(usersData)) {
         if (typeof userId !== 'string' || !userId.includes('@')) continue;
         const existing = await getUserById(userId);
         if (existing) {
-            await updateUser(userId, userData);
+            const merged = { ...userData };
+            for (const field of PREFERENCE_FIELDS) {
+                if (existing[field] !== undefined) {
+                    merged[field] = existing[field];
+                }
+            }
+            await updateUser(userId, merged);
             if (userData && userData.aura) {
                 await updateAura(userId, userData.aura);
             }

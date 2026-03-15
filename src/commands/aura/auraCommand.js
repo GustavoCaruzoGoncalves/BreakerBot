@@ -1,4 +1,5 @@
 const path = require('path');
+const util = require('util');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const mentionsController = require('../../controllers/mentionsController');
 const repo = require('../../database/repository');
@@ -1173,6 +1174,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '📈 Ninguém no ranking de aura ainda. Jogue para acumular pontos!' }, { quoted: msg });
             return;
         }
+        const globalMentionsEnabled = await mentionsController.getMentionsEnabled();
         const mentionTexts = [];
         const mentions = [];
         for (let i = 0; i < ranking.length; i++) {
@@ -1180,7 +1182,8 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const jidForMention = (r.jid && r.jid.endsWith('@lid')) ? r.userId : (r.jid || r.userId);
             const mentionInfo = await mentionsController.processSingleMention(jidForMention, contactsCache);
             mentionTexts.push(mentionInfo.mentionText);
-            if (mentionInfo.mentions && mentionInfo.mentions.length) mentions.push(...mentionInfo.mentions);
+            const canMention = globalMentionsEnabled && (r.allowMentions === true);
+            if (canMention && mentionInfo.mentions && mentionInfo.mentions.length) mentions.push(...mentionInfo.mentions);
         }
         let text = `📈 *Ranking de Aura — Quem tem mais aura* 📈\n`;
         text += `_Posição · Nome · Categoria (nível) · Pontos_\n\n`;
@@ -1200,6 +1203,10 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const trimmed = textMessage.trim();
         const isMe = /^!aura\s+info\s+me\s*$/i.test(trimmed);
         const mentionedJid = getMentionedJid(msg);
+        if (mentionedJid) {
+            console.log('[BAILEYS MENTION] Payload completo quando alguém é mencionado:');
+            console.log(util.inspect(msg, { depth: 10, showHidden: false, colors: false }));
+        }
         if (!isMe && !mentionedJid) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!aura info me* para suas informações ou *!aura info @usuario* para ver de alguém.' }, { quoted: msg });
             return;
@@ -1207,7 +1214,34 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const targetKey = isMe ? senderAuraKey : await getAuraKey(mentionedJid);
         const targetNumber = isMe ? number : getUserIdNumber(targetKey);
         const user = await auraSystem.getUserAura(targetKey);
+        console.log('[AURA INFO]', {
+            isMe,
+            mentionedJid: mentionedJid || '(n/a)',
+            senderAuraKey: isMe ? senderAuraKey : '(n/a)',
+            targetKey: targetKey || '(null)',
+            targetNumber: targetNumber || '(null)',
+            userFound: !!user,
+            targetKeyIncludesAt: targetKey ? targetKey.includes('@') : false
+        });
         if (!user) {
+            try {
+                const allUsers = await repo.getAllUsers();
+                const keys = Object.keys(allUsers).filter(k => typeof k === 'string' && k.includes('@') && !k.endsWith('@g.us'));
+                const findById = targetKey ? await repo.getUserById(targetKey) : null;
+                const findByJidTarget = targetKey ? await repo.findUserByJid(targetKey) : null;
+                const findByJidMentioned = mentionedJid ? await repo.findUserByJid(mentionedJid) : null;
+                const matchingKeys = keys.filter(k => k === targetKey || k === mentionedJid || (targetNumber && k.startsWith(targetNumber + '@')) || (mentionedJid && allUsers[k]?.jid === mentionedJid));
+                console.log('[AURA INFO] FALHA - debug:', {
+                    totalUsers: keys.length,
+                    targetKeyExistsInAllUsers: targetKey ? targetKey in allUsers : false,
+                    findUserById: !!findById,
+                    findUserByJid_targetKey: findByJidTarget,
+                    findUserByJid_mentionedJid: findByJidMentioned,
+                    matchingKeys: matchingKeys.slice(0, 5)
+                });
+            } catch (e) {
+                console.error('[AURA INFO] Erro no debug:', e.message);
+            }
             await sock.sendMessage(chatId, { text: '❌ Não foi possível carregar as informações de aura.' }, { quoted: msg });
             return;
         }
