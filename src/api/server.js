@@ -45,6 +45,7 @@ app.use(express.json({ limit: '2mb' }));
 app.set('trust proxy', 1);
 
 const auraCommand = require('../commands/aura/auraCommand');
+const { levelSystem } = require('../commands/level/levelCommand');
 const auraSystem = auraCommand.auraSystem;
 const getAuraKey = auraCommand.getAuraKey;
 const MISSION_IDS = auraCommand.MISSION_IDS;
@@ -436,6 +437,7 @@ app.post('/api/users', async (req, res) => {
         }
 
         const newUser = await repo.createUser(userId, userData);
+        levelSystem.invalidateCache();
 
         res.status(201).json({
             success: true,
@@ -467,6 +469,7 @@ app.put('/api/users/:id', async (req, res) => {
         }
 
         const user = await repo.updateUser(userId, userData);
+        levelSystem.invalidateCache();
 
         res.json({
             success: true,
@@ -504,6 +507,7 @@ app.patch('/api/users/:id', async (req, res) => {
             await repo.updateAura(userId, mergedAura);
         }
 
+        levelSystem.invalidateCache();
         const updatedUser = await repo.getUserById(userId);
         res.json({
             success: true,
@@ -535,6 +539,7 @@ app.delete('/api/users/:id', async (req, res) => {
 
         const deletedUser = await repo.addDeletedUser(userId, user);
         await repo.deleteUser(userId);
+        levelSystem.invalidateCache();
 
         res.json({
             success: true,
@@ -599,6 +604,7 @@ app.post('/api/admin/users/import', async (req, res) => {
             if (val && typeof val === 'object') usersData[key] = val;
         }
         await repo.saveAllUsers(usersData);
+        levelSystem.invalidateCache();
         res.json({
             success: true,
             message: 'Importação concluída com sucesso',
@@ -654,6 +660,7 @@ app.post('/api/backup/restore/:id', async (req, res) => {
         const userData = backupEntry.data;
         await repo.restoreUser(userId, userData);
         await repo.removeDeletedUser(userId);
+        levelSystem.invalidateCache();
 
         const user = await repo.getUserById(userId);
 
