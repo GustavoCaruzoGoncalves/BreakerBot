@@ -462,6 +462,12 @@ async function ensureAuraRow(userId) {
  * Usa upsert para criar linha em aura se não existir (ex: usuário web sem aura prévia). */
 async function incrementAuraPoints(jidOrUserId, amount) {
     const userId = await resolveAuraUserId(jidOrUserId) || findUserByJid(jidOrUserId) || jidOrUserId;
+    return incrementAuraPointsDirect(userId, amount);
+}
+
+/** Incrementa aura_points diretamente pelo user_id (sem re-resolver). Use quando já tem o user_id canônico. */
+async function incrementAuraPointsDirect(userId, amount) {
+    if (!userId) return null;
     const amt = Number(amount) || 0;
     await ensureAuraRow(userId);
     const r = await query(
@@ -475,9 +481,15 @@ async function incrementAuraPoints(jidOrUserId, amount) {
 /** Retorna aura_points diretamente do banco para um user_id. */
 async function getAuraPoints(userId) {
     const resolved = await resolveAuraUserId(userId) || findUserByJid(userId) || userId;
+    return getAuraPointsDirect(resolved);
+}
+
+/** Retorna aura_points diretamente pelo user_id (sem re-resolver). Use quando já tem o user_id canônico. */
+async function getAuraPointsDirect(userId) {
+    if (!userId) return 0;
     const r = await query(
         `SELECT aura_points FROM aura WHERE user_id = $1`,
-        [resolved]
+        [userId]
     );
     return r.rows[0] ? Number(r.rows[0].aura_points) : 0;
 }
@@ -1034,7 +1046,9 @@ module.exports = {
     resolveCanonicalUserId,
     resolveAuraUserId,
     incrementAuraPoints,
+    incrementAuraPointsDirect,
     getAuraPoints,
+    getAuraPointsDirect,
     transferAura,
     ensureAuraRow,
     saveAllUsers,

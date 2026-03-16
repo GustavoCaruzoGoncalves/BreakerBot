@@ -87,6 +87,32 @@ const formatUserId = (id) => {
     return `${formattedId}@s.whatsapp.net`;
 };
 
+/** Busca usuário e saldo de aura usando a MESMA lógica do GET /api/aura/users/:id */
+async function findAuraUserAndBalance(requestedId) {
+    const id = formatUserId(requestedId);
+    const resolvedByLid = await repo.findUserIdByJid(id);
+    const users = await repo.getAllUsers();
+    let userId = resolvedByLid || id;
+    let user = users[userId];
+    if (!user) {
+        userId = id;
+        user = users[userId];
+    }
+    if (!user) {
+        for (const [uid, data] of Object.entries(users)) {
+            if (!isUserKey(uid) || !data) continue;
+            if (data.jid === id || uid === id) {
+                user = data;
+                userId = uid;
+                break;
+            }
+        }
+    }
+    const aura = user?.aura;
+    const balance = Number(aura?.auraPoints ?? 0);
+    return { userId, user, balance };
+}
+
 const getRequiredXP = (level) => {
     if (level < 10) {
         return 100 + (level - 1) * 10;
@@ -986,26 +1012,13 @@ app.get('/api/aura/ranking', async (req, res) => {
 
 app.get('/api/aura/users/:id', async (req, res) => {
     try {
-        const requestedId = formatUserId(req.params.id);
-        const users = await repo.getAllUsers();
-        let userId = requestedId;
-        let user = users[userId];
+        const { userId, user } = await findAuraUserAndBalance(req.params.id);
         if (!user) {
-            for (const [uid, data] of Object.entries(users)) {
-                if (!isUserKey(uid) || !data) continue;
-                if (data.jid === requestedId || uid === requestedId) {
-                    user = data;
-                    userId = uid;
-                    break;
-                }
-            }
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Usuário não encontrado',
-                    userId: requestedId
-                });
-            }
+            return res.status(404).json({
+                success: false,
+                message: 'Usuário não encontrado',
+                userId: formatUserId(req.params.id)
+            });
         }
         const aura = user.aura || {
             auraPoints: 0,
@@ -1169,9 +1182,7 @@ app.post('/api/aura/slot', async (req, res) => {
         if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
             return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
         }
-        const userId = formatUserId(session.userId);
-        const dbUserId = await repo.findUserByJid(userId) || userId;
-        const user = await repo.getUserById(dbUserId);
+        const { userId: dbUserId, user, balance } = await findAuraUserAndBalance(session.userId);
         if (!user) {
             return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
         }
@@ -1182,7 +1193,6 @@ app.post('/api/aura/slot', async (req, res) => {
                 message: 'Aposta mínima: 1 aura'
             });
         }
-        const balance = await repo.getAuraPoints(dbUserId);
         if (balance < betAmount) {
             return res.status(400).json({
                 success: false,
@@ -1190,9 +1200,9 @@ app.post('/api/aura/slot', async (req, res) => {
                 balance
             });
         }
-        const deductResult = await repo.incrementAuraPoints(dbUserId, -betAmount);
+        const deductResult = await repo.incrementAuraPointsDirect(dbUserId, -betAmount);
         if (deductResult === null) {
-            console.error('[slot] incrementAuraPoints(-bet) retornou null para', dbUserId);
+            console.error('[slot] incrementAuraPointsDirect(-bet) retornou null para', dbUserId);
             return res.status(500).json({ success: false, message: 'Erro ao atualizar aura' });
         }
         levelSystem.invalidateCache();
@@ -1204,13 +1214,13 @@ app.post('/api/aura/slot', async (req, res) => {
         const winAmount = calcSlotWin(reels, betAmount);
         const netChange = winAmount - betAmount;
         if (netChange > 0) {
-            const addResult = await repo.incrementAuraPoints(dbUserId, netChange);
+            const addResult = await repo.incrementAuraPointsDirect(dbUserId, netChange);
             if (addResult === null) {
-                console.error('[slot] incrementAuraPoints(win) retornou null para', dbUserId);
+                console.error('[slot] incrementAuraPointsDirect(win) retornou null para', dbUserId);
             }
             levelSystem.invalidateCache();
         }
-        const newBalance = await repo.getAuraPoints(dbUserId);
+        const newBalance = await repo.getAuraPointsDirect(dbUserId);
         res.json({
             success: true,
             reels: reels.map(col => col.map(s => ({ id: s.id, emoji: s.emoji }))),
@@ -1242,22 +1252,20 @@ app.post('/api/aura/game-reward', async (req, res) => {
         if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
             return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
         }
-        const userId = formatUserId(session.userId);
-        const dbUserId = await repo.findUserByJid(userId) || userId;
-        const user = await repo.getUserById(dbUserId);
+        const { userId: dbUserId, user } = await findAuraUserAndBalance(session.userId);
         if (!user) {
             return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
         }
         const reward = Math.floor(scoreNum);
         if (reward !== 0) {
-            const newTotal = await repo.incrementAuraPoints(dbUserId, reward);
+            const newTotal = await repo.incrementAuraPointsDirect(dbUserId, reward);
             if (newTotal === null) {
-                console.error('[game-reward] incrementAuraPoints retornou null para', dbUserId);
+                console.error('[game-reward] incrementAuraPointsDirect retornou null para', dbUserId);
                 return res.status(500).json({ success: false, message: 'Erro ao atualizar aura' });
             }
             levelSystem.invalidateCache();
         }
-        const balance = await repo.getAuraPoints(dbUserId);
+        const balance = await repo.getAuraPointsDirect(dbUserId);
         res.json({
             success: true,
             reward,
