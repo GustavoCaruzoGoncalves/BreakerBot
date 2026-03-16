@@ -151,6 +151,8 @@ async function getLevelUserData(number) {
 async function getCanonicalUserKey(jid) {
     if (!jid) return null;
     try {
+        const byLid = await repo.findUserIdByJid(jid);
+        if (byLid) return byLid;
         const usersData = await repo.getAllUsers();
         if (usersData[jid]) {
             // Se já é uma chave @s.whatsapp.net, ela É a canônica — retorna direto
@@ -609,7 +611,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     const number = getUserIdNumber(sender);
     if (!number) return;
     if (msg.key.fromMe) return;
-    const senderAuraKey = sender;
+    const senderAuraKey = (await repo.findUserIdByJid(sender)) || sender;
 
     const messageType = Object.keys(msg.message)[0];
     const textMessage = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();

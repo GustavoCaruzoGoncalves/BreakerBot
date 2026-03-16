@@ -434,6 +434,8 @@ async function resolveAuraUserId(jidOrKey) {
     if (!jidOrKey) return null;
     const direct = await findUserByJid(jidOrKey);
     if (direct) return direct;
+    const byLid = await findUserIdByJid(jidOrKey);
+    if (byLid) return byLid;
     const users = await getAllUsers();
     if (users[jidOrKey]) return jidOrKey;
     for (const [userId, userData] of Object.entries(users)) {
