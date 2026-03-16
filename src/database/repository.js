@@ -221,6 +221,61 @@ async function getAuraRanking(limit = 10) {
     }));
 }
 
+/**
+ * Busca básica de usuário + saldo de aura a partir de um identificador flexível.
+ * - Aceita user_id completo (@s.whatsapp.net), jid ou número puro.
+ * - Usa apenas consultas diretas ao Postgres (NÃO carrega todos os usuários).
+ */
+async function getAuraUserBasicByIdOrJid(requestedId) {
+    if (!requestedId) {
+        return { userId: null, user: null, balance: 0 };
+    }
+
+    const raw = String(requestedId).trim();
+
+    async function loadByUserId(candidateId) {
+        if (!candidateId) return null;
+        const u = await getUserById(candidateId);
+        if (!u) return null;
+        const balance = Number(u.aura?.auraPoints ?? 0);
+        return { userId: candidateId, user: u, balance };
+    }
+
+    // 1) Se já vier com @, tentamos direto + resoluções por jid/lid
+    if (raw.includes('@')) {
+        const direct = await loadByUserId(raw);
+        if (direct) return direct;
+
+        const byJid = await findUserByJid(raw);
+        if (byJid) {
+            const resolved = await loadByUserId(byJid);
+            if (resolved) return resolved;
+        }
+
+        const byLid = await findUserIdByJid(raw);
+        if (byLid) {
+            const resolved = await loadByUserId(byLid);
+            if (resolved) return resolved;
+        }
+    } else {
+        // 2) Número puro: primeiro tentamos como @s.whatsapp.net
+        const waJid = `${raw}@s.whatsapp.net`;
+        const directNumber = await loadByUserId(waJid);
+        if (directNumber) return directNumber;
+
+        // 3) Em seguida tentamos como @lid via findUserIdByJid
+        const lid = `${raw}@lid`;
+        const byLid = await findUserIdByJid(lid);
+        if (byLid) {
+            const resolved = await loadByUserId(byLid);
+            if (resolved) return resolved;
+        }
+    }
+
+    // Não encontrado
+    return { userId: null, user: null, balance: 0 };
+}
+
 async function getUserById(userId) {
     const userResult = await query('SELECT * FROM users WHERE user_id = $1', [userId]);
     const row = userResult.rows[0];
@@ -476,6 +531,38 @@ async function incrementAuraPointsDirect(userId, amount) {
         [userId, amt]
     );
     return r.rows[0]?.aura_points ?? null;
+}
+
+/**
+ * Aplica um delta de aura de forma atômica e retorna o saldo final.
+ * - Garante que o usuário tenha pelo menos requiredMinimumBalance ANTES da atualização.
+ * - Usa UPDATE ... RETURNING para evitar múltiplas idas ao banco.
+ */
+async function applyAuraDeltaReturningBalance(userId, delta, requiredMinimumBalance = 0) {
+    if (!userId) {
+        return { ok: false, reason: 'invalid_user', balance: null };
+    }
+
+    const amt = Math.floor(Number(delta) || 0);
+
+    // Garante que exista linha em aura para esse usuário
+    await ensureAuraRow(userId);
+
+    const r = await query(
+        `UPDATE aura
+         SET aura_points = GREATEST(0, COALESCE(aura_points, 0) + $2::int),
+             updated_at = NOW()
+         WHERE user_id = $1
+           AND COALESCE(aura_points, 0) >= $3::int
+         RETURNING aura_points`,
+        [userId, amt, Math.floor(Number(requiredMinimumBalance) || 0)]
+    );
+
+    if (r.rowCount === 0) {
+        return { ok: false, reason: 'insufficient_balance', balance: null };
+    }
+
+    return { ok: true, reason: 'ok', balance: Number(r.rows[0].aura_points) };
 }
 
 /** Retorna aura_points diretamente do banco para um user_id. */
@@ -1045,8 +1132,10 @@ module.exports = {
     findUserIdByJid,
     resolveCanonicalUserId,
     resolveAuraUserId,
+    getAuraUserBasicByIdOrJid,
     incrementAuraPoints,
     incrementAuraPointsDirect,
+    applyAuraDeltaReturningBalance,
     getAuraPoints,
     getAuraPointsDirect,
     transferAura,

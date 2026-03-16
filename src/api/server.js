@@ -87,29 +87,12 @@ const formatUserId = (id) => {
     return `${formattedId}@s.whatsapp.net`;
 };
 
-/** Busca usuário e saldo de aura usando a MESMA lógica do GET /api/aura/users/:id */
+/** Busca usuário e saldo de aura usando a MESMA lógica do GET /api/aura/users/:id,
+ *  mas agora indo direto no Postgres (sem carregar todos os usuários na memória).
+ */
 async function findAuraUserAndBalance(requestedId) {
-    const id = formatUserId(requestedId);
-    const resolvedByLid = await repo.findUserIdByJid(id);
-    const users = await repo.getAllUsers();
-    let userId = resolvedByLid || id;
-    let user = users[userId];
-    if (!user) {
-        userId = id;
-        user = users[userId];
-    }
-    if (!user) {
-        for (const [uid, data] of Object.entries(users)) {
-            if (!isUserKey(uid) || !data) continue;
-            if (data.jid === id || uid === id) {
-                user = data;
-                userId = uid;
-                break;
-            }
-        }
-    }
-    const aura = user?.aura;
-    const balance = Number(aura?.auraPoints ?? 0);
+    // Mantemos esta função como fachada para compatibilidade com o restante da API.
+    const { userId, user, balance } = await repo.getAuraUserBasicByIdOrJid(formatUserId(requestedId));
     return { userId, user, balance };
 }
 
@@ -1173,19 +1156,32 @@ function calcSlotWin(reels, bet) {
 }
 
 app.post('/api/aura/slot', async (req, res) => {
+    // Logs de performance de diagnóstico – podem ser removidos depois se necessário.
+    const tStart = Date.now();
     try {
         const { token, bet } = req.body;
         if (!token) {
             return res.status(401).json({ success: false, message: 'Token é obrigatório' });
         }
+
+        const tSessionStart = Date.now();
         const session = await repo.getSession(token);
+        const tSessionEnd = Date.now();
+        console.log('[slot][PERF] getSession ms =', tSessionEnd - tSessionStart);
+
         if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
             return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
         }
-        const { userId: dbUserId, user, balance } = await findAuraUserAndBalance(session.userId);
+
+        const tUserStart = Date.now();
+        const { userId: dbUserId, user, balance } = await repo.getAuraUserBasicByIdOrJid(session.userId);
+        const tUserEnd = Date.now();
+        console.log('[slot][PERF] getAuraUserBasicByIdOrJid ms =', tUserEnd - tUserStart);
+
         if (!user) {
             return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
         }
+
         const betAmount = Math.floor(Number(bet) || 0);
         if (betAmount < 1) {
             return res.status(400).json({
@@ -1200,12 +1196,8 @@ app.post('/api/aura/slot', async (req, res) => {
                 balance
             });
         }
-        const deductResult = await repo.incrementAuraPointsDirect(dbUserId, -betAmount);
-        if (deductResult === null) {
-            console.error('[slot] incrementAuraPointsDirect(-bet) retornou null para', dbUserId);
-            return res.status(500).json({ success: false, message: 'Erro ao atualizar aura' });
-        }
-        levelSystem.invalidateCache();
+
+        const tCalcStart = Date.now();
         const reels = [
             [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()],
             [pickRandomSymbol(), pickRandomSymbol(), pickRandomSymbol()],
@@ -1213,24 +1205,48 @@ app.post('/api/aura/slot', async (req, res) => {
         ];
         const winAmount = calcSlotWin(reels, betAmount);
         const netChange = winAmount - betAmount;
-        if (netChange > 0) {
-            const addResult = await repo.incrementAuraPointsDirect(dbUserId, netChange);
-            if (addResult === null) {
-                console.error('[slot] incrementAuraPointsDirect(win) retornou null para', dbUserId);
+        const tCalcEnd = Date.now();
+        console.log('[slot][PERF] cálculo dos reels/resultado ms =', tCalcEnd - tCalcStart);
+
+        // Atualização atômica: aplica delta (win - bet) em uma única operação no banco.
+        // Também valida o saldo mínimo exigido pela aposta diretamente no SQL.
+        const tUpdateStart = Date.now();
+        const updateResult = await repo.applyAuraDeltaReturningBalance(dbUserId, netChange, betAmount);
+        const tUpdateEnd = Date.now();
+        console.log('[slot][PERF] applyAuraDeltaReturningBalance ms =', tUpdateEnd - tUpdateStart);
+
+        if (!updateResult.ok) {
+            if (updateResult.reason === 'insufficient_balance') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Saldo insuficiente',
+                    balance
+                });
             }
-            levelSystem.invalidateCache();
+            console.error('[slot] applyAuraDeltaReturningBalance falhou para', dbUserId, 'motivo:', updateResult.reason);
+            return res.status(500).json({ success: false, message: 'Erro ao atualizar aura' });
         }
-        const newBalance = await repo.getAuraPointsDirect(dbUserId);
-        res.json({
+
+        // Removido levelSystem.invalidateCache() do fluxo do slot para evitar
+        // invalidação de cache agressiva em jogadas rápidas. Se necessário,
+        // este ponto pode ser revisitado para uma estratégia mais granular.
+
+        const responsePayload = {
             success: true,
             reels: reels.map(col => col.map(s => ({ id: s.id, emoji: s.emoji }))),
             bet: betAmount,
             win: winAmount,
             netChange,
-            balance: newBalance
-        });
+            balance: updateResult.balance
+        };
+
+        const tEnd = Date.now();
+        console.log('[slot][PERF] total endpoint ms =', tEnd - tStart);
+
+        res.json(responsePayload);
     } catch (error) {
         console.error('Erro no slot:', error);
+        console.log('[slot][PERF] falha após ms =', Date.now() - tStart);
         res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
 });
