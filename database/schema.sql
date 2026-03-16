@@ -306,3 +306,89 @@ COMMENT ON TABLE daily_bonus IS 'Daily bonus control - migrated from levels_info
 COMMENT ON TABLE amigo_secreto_groups IS 'Secret Santa groups - migrated from data/amigoSecreto/participantes.json';
 COMMENT ON TABLE user_badges IS 'User badges - extracted from users.badges';
 COMMENT ON TABLE user_level_history IS 'User level change history - extracted from users.level_history';
+
+-- =============================================================================
+-- 8. SKULLCARDS (UNO-LIKE MULTIPLAYER CARD GAME)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS skullcards_rooms (
+    room_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    host_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'lobby', -- lobby | in_progress | finished
+    is_public BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Backfill para bancos onde skullcards_rooms já existia sem a coluna is_public
+ALTER TABLE skullcards_rooms
+    ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS skullcards_room_players (
+    room_id UUID NOT NULL REFERENCES skullcards_rooms(room_id) ON DELETE CASCADE,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (room_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_skullcards_room_players_room ON skullcards_room_players(room_id);
+
+CREATE TABLE IF NOT EXISTS skullcards_matches (
+    match_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES skullcards_rooms(room_id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'active', -- active | finished | cancelled
+    current_turn_user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    direction SMALLINT NOT NULL DEFAULT 1, -- 1 = clockwise, -1 = counter-clockwise
+    current_color VARCHAR(10) NOT NULL, -- red | yellow | green | blue | wild
+    pending_draw INTEGER NOT NULL DEFAULT 0,
+    discard_top VARCHAR(20) NOT NULL, -- e.g. "R-5", "B-SKIP", "W", "W+4"
+    winner_user_id VARCHAR(100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_skullcards_matches_room ON skullcards_matches(room_id);
+CREATE INDEX IF NOT EXISTS idx_skullcards_matches_status ON skullcards_matches(status);
+
+-- Each row in skullcards_hands represents a single card in a player's hand.
+-- Allow duplicate cards for the same player by using a surrogate primary key.
+CREATE TABLE IF NOT EXISTS skullcards_hands (
+    id SERIAL PRIMARY KEY,
+    match_id UUID NOT NULL REFERENCES skullcards_matches(match_id) ON DELETE CASCADE,
+    user_id VARCHAR(100) NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    card VARCHAR(20) NOT NULL
+);
+
+-- Backfill for databases where skullcards_hands already existed with a composite PK
+ALTER TABLE skullcards_hands
+    DROP CONSTRAINT IF EXISTS skullcards_hands_pkey;
+
+ALTER TABLE skullcards_hands
+    ADD COLUMN IF NOT EXISTS id SERIAL PRIMARY KEY;
+
+CREATE INDEX IF NOT EXISTS idx_skullcards_hands_match ON skullcards_hands(match_id);
+
+-- Draw pile and discard pile store card order explicitly (1 = top of pile)
+CREATE TABLE IF NOT EXISTS skullcards_draw_pile (
+    match_id UUID NOT NULL REFERENCES skullcards_matches(match_id) ON DELETE CASCADE,
+    card_order INTEGER NOT NULL,
+    card VARCHAR(20) NOT NULL,
+    PRIMARY KEY (match_id, card_order)
+);
+
+CREATE INDEX IF NOT EXISTS idx_skullcards_draw_pile_match ON skullcards_draw_pile(match_id);
+
+CREATE TABLE IF NOT EXISTS skullcards_discard_pile (
+    match_id UUID NOT NULL REFERENCES skullcards_matches(match_id) ON DELETE CASCADE,
+    card_order INTEGER NOT NULL,
+    card VARCHAR(20) NOT NULL,
+    PRIMARY KEY (match_id, card_order)
+);
+
+CREATE INDEX IF NOT EXISTS idx_skullcards_discard_pile_match ON skullcards_discard_pile(match_id);
+
+COMMENT ON TABLE skullcards_rooms IS 'SkullCards game rooms (lobby + matches).';
+COMMENT ON TABLE skullcards_room_players IS 'Players currently in a SkullCards room.';
+COMMENT ON TABLE skullcards_matches IS 'SkullCards matches, UNO-like state.';
+COMMENT ON TABLE skullcards_hands IS 'Per-player cards in hand for SkullCards matches.';
+COMMENT ON TABLE skullcards_draw_pile IS 'Draw pile for SkullCards matches (top = lowest card_order).';
+COMMENT ON TABLE skullcards_discard_pile IS 'Discard pile history for SkullCards matches (top = highest card_order).';

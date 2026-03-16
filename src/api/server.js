@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -7,6 +8,8 @@ const PORT = process.env.API_PORT || 3001;
 const HOST = process.env.API_HOST || '0.0.0.0';
 
 const repo = require('../database/repository');
+const skullService = require('../games/skullcards/skullcardsService');
+const { setupSkullcardsSockets } = require('../games/skullcards/skullcardsSocket');
 
 const getAllowedOrigins = () => {
     if (process.env.CORS_ORIGINS) {
@@ -1357,12 +1360,142 @@ app.get('/', (req, res) => {
 
 const { initDatabase } = require('../database/init');
 
+// =============================================================================
+// SKULLCARDS REST API
+// =============================================================================
+
+app.post('/api/skullcards/rooms', async (req, res) => {
+    try {
+        const { token, isPublic } = req.body || {};
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Token é obrigatório' });
+        }
+        const session = await repo.getSession(token);
+        if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+            return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
+        }
+        const room = await skullService.createRoomForUser(session.userId, !!isPublic);
+        res.status(201).json({ success: true, room });
+    } catch (error) {
+        console.error('[SkullCards] Erro ao criar sala:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.post('/api/skullcards/rooms/:roomId/join', async (req, res) => {
+    try {
+        const { token } = req.body || {};
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Token é obrigatório' });
+        }
+        const session = await repo.getSession(token);
+        if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+            return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
+        }
+        const roomKey = req.params.roomId;
+        const resolvedRoomId = await skullService.resolveRoomIdFromCodeOrId(roomKey);
+        if (!resolvedRoomId) {
+            return res.status(404).json({ success: false, message: 'Sala não encontrada' });
+        }
+        const room = await skullService.joinRoom(resolvedRoomId, session.userId);
+        res.json({ success: true, room });
+    } catch (error) {
+        console.error('[SkullCards] Erro ao entrar na sala:', error);
+        if (error.message === 'room_not_found') {
+            return res.status(404).json({ success: false, message: 'Sala não encontrada' });
+        }
+        if (error.message === 'room_not_in_lobby') {
+            return res.status(400).json({ success: false, message: 'Sala já iniciou uma partida' });
+        }
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/skullcards/rooms-public', async (req, res) => {
+    try {
+        const rooms = await skullService.listPublicRooms();
+        res.json({ success: true, rooms });
+    } catch (error) {
+        console.error('[SkullCards] Erro ao listar salas públicas:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.post('/api/skullcards/rooms/:roomId/start', async (req, res) => {
+    try {
+        const { token } = req.body || {};
+        if (!token) {
+            return res.status(401).json({ success: false, message: 'Token é obrigatório' });
+        }
+        const session = await repo.getSession(token);
+        if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+            return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
+        }
+        const roomId = req.params.roomId;
+        const room = await skullService.getRoom(roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'Sala não encontrada' });
+        }
+        if (room.host_user_id !== session.userId) {
+            return res.status(403).json({ success: false, message: 'Apenas o host pode iniciar a partida' });
+        }
+        const matchInfo = await skullService.startMatch(roomId);
+        res.json({ success: true, match: matchInfo });
+    } catch (error) {
+        console.error('[SkullCards] Erro ao iniciar partida:', error);
+        if (error.message === 'room_not_found') {
+            return res.status(404).json({ success: false, message: 'Sala não encontrada' });
+        }
+        if (error.message === 'room_not_in_lobby') {
+            return res.status(400).json({ success: false, message: 'Sala já iniciou uma partida' });
+        }
+        if (error.message === 'not_enough_players') {
+            return res.status(400).json({ success: false, message: 'É necessário pelo menos 2 jogadores' });
+        }
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/skullcards/rooms/:roomId', async (req, res) => {
+    try {
+        const roomId = req.params.roomId;
+        const room = await skullService.getRoom(roomId);
+        if (!room) {
+            return res.status(404).json({ success: false, message: 'Sala não encontrada' });
+        }
+        res.json({ success: true, room });
+    } catch (error) {
+        console.error('[SkullCards] Erro ao buscar sala:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+app.get('/api/skullcards/matches/:matchId/state', async (req, res) => {
+    try {
+        const matchId = req.params.matchId;
+        const state = await skullService.getMatchState(matchId);
+        if (!state) {
+            return res.status(404).json({ success: false, message: 'Partida não encontrada' });
+        }
+        res.json({ success: true, state });
+    } catch (error) {
+        console.error('[SkullCards] Erro ao buscar estado da partida:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
 async function startApi() {
     const initOk = await initDatabase();
     if (!initOk) {
         console.warn('[DB] Init falhou - a API iniciará, mas funcionalidades que usam o banco podem não funcionar.');
     }
-    app.listen(PORT, HOST, () => {
+
+    const server = http.createServer(app);
+
+    const allowedOrigins = getAllowedOrigins();
+    setupSkullcardsSockets(server, allowedOrigins);
+
+    server.listen(PORT, HOST, () => {
         console.log(`\n========================================`);
         console.log(`  BreakerBot API - ${process.env.NODE_ENV || 'development'}`);
         console.log(`========================================`);
