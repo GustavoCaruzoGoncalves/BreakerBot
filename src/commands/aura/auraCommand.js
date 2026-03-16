@@ -24,6 +24,10 @@ const AURA_TIERS = [
     { minPoints: -999999999,   name: 'Sugador de aura ☠️' }
 ];
 
+function formatAura(value) {
+    return (Number(value) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+}
+
 function getAuraTier(auraPoints) {
     const points = Number(auraPoints) || 0;
     for (const tier of AURA_TIERS) {
@@ -557,7 +561,7 @@ async function checkAuraNegativeAndPunish(sock, chatId, number, contactsCache) {
     const jid = number.includes('@') ? number : getJidFromNumber(number);
     const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(jid), contactsCache);
     await sock.sendMessage(chatId, {
-        text: `${mentionInfo.mentionText} FARMOU AURA NEGATIVA, -1000 AURA 💀💀💀`,
+        text: `${mentionInfo.mentionText} FARMOU AURA NEGATIVA, -${formatAura(1000)} AURA 💀💀💀`,
         mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
     });
     await auraSystem.addAuraPoints(number, -1000);
@@ -584,7 +588,7 @@ async function endMogDuel(sock, chatId, duel, contactsCache = {}) {
     const totalGain = 500 + missionReward;
     const winnerMention = await mentionsController.processSingleMention(await getJidForMention(winnerAuraKey), contactsCache);
     await sock.sendMessage(chatId, {
-        text: `🏆 Duelo encerrado! ${winnerMention.mentionText} venceu o mog! (${winnerCount} x ${loserCount} mensagens)\n✨ *+500* aura pela vitória${missionReward ? ` + *${missionReward}* pela missão (Vença 1 duelo)` : ''} = *${totalGain}* aura no total.`,
+        text: `🏆 Duelo encerrado! ${winnerMention.mentionText} venceu o mog! (${winnerCount} x ${loserCount} mensagens)\n✨ *+${formatAura(500)}* aura pela vitória${missionReward ? ` + *${formatAura(missionReward)}* pela missão (Vença 1 duelo)` : ''} = *${formatAura(totalGain)}* aura no total.`,
         mentions: winnerMention.mentions?.length ? winnerMention.mentions : undefined
     });
 }
@@ -633,7 +637,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 const winnerMention = await mentionsController.processSingleMention(await getJidForMention(senderAuraKey), contactsCache);
                 const emoji = result.amount >= 0 ? '✨' : '💀';
                 await sock.sendMessage(chatId, {
-                    text: `${emoji} ${winnerMention.mentionText} ${result.amount >= 0 ? 'ganhou' : 'perdeu'} *${Math.abs(result.amount)}* de aura! Total: *${result.newTotal}*`,
+                    text: `${emoji} ${winnerMention.mentionText} ${result.amount >= 0 ? 'ganhou' : 'perdeu'} *${formatAura(Math.abs(result.amount))}* de aura! Total: *${formatAura(result.newTotal)}*`,
                     mentions: winnerMention.mentions?.length ? winnerMention.mentions : undefined
                 }, { quoted: msg });
                 return;
@@ -647,7 +651,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 const result = await applyEventEffect(activeEvent.effect, senderAuraKey);
                 const participantMention = await mentionsController.processSingleMention(await getJidForMention(senderAuraKey), contactsCache);
                 await sock.sendMessage(chatId, {
-                    text: `✨ ${participantMention.mentionText} entrou e ganhou *${result.amount}* de aura! Total: *${result.newTotal}*`,
+                    text: `✨ ${participantMention.mentionText} entrou e ganhou *${formatAura(result.amount)}* de aura! Total: *${formatAura(result.newTotal)}*`,
                     mentions: participantMention.mentions?.length ? participantMention.mentions : undefined
                 }, { quoted: msg });
                 return;
@@ -779,13 +783,13 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 const missionReward = await auraSystem.hasMission(targetAuraKey, 'survive_attack') ? await auraSystem.completeMission(targetAuraKey, 'survive_attack') : 0;
                 const totalGain = 500 + missionReward;
                 sock.sendMessage(chatId, {
-                    text: `🛡️ ${targetMention.mentionText} sobreviveu ao ataque! (${countTarget} x ${countAttacker} mensagens)\n✨ *+500* aura${missionReward ? ` + *${missionReward}* pela missão` : ''} = *${totalGain}* aura.`,
+                    text: `🛡️ ${targetMention.mentionText} sobreviveu ao ataque! (${countTarget} x ${countAttacker} mensagens)\n✨ *+${formatAura(500)}* aura${missionReward ? ` + *${formatAura(missionReward)}* pela missão` : ''} = *${formatAura(totalGain)}* aura.`,
                     mentions: mognowMentions.length ? mognowMentions : undefined
                 }).catch(() => {});
             } else if (countAttacker > countTarget) {
                 if (attackerAuraKey) await auraSystem.addAuraPoints(attackerAuraKey, 5);
                 sock.sendMessage(chatId, {
-                    text: `⏱ ${attackerMention.mentionText} venceu o mognow! (${countAttacker} x ${countTarget} mensagens)\n✨ Atacante ganha *5* de aura.`,
+                    text: `⏱ ${attackerMention.mentionText} venceu o mognow! (${countAttacker} x ${countTarget} mensagens)\n✨ Atacante ganha *${formatAura(5)}* de aura.`,
                     mentions: mognowMentions.length ? mognowMentions : undefined
                 }).catch(() => {});
             } else {
@@ -801,7 +805,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         await auraSystem.addAuraPoints(senderAuraKey, gained);
         const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
         await sock.sendMessage(chatId, {
-            text: gained > 0 ? `🧘 Meditação concluída. Você absorveu *+${gained}* de aura. Total: *${total}*` : `🧘 Meditação concluída. Sua aura permanece estável. Total: *${total}*`
+            text: gained > 0 ? `🧘 Meditação concluída. Você absorveu *+${formatAura(gained)}* de aura. Total: *${formatAura(total)}*` : `🧘 Meditação concluída. Sua aura permanece estável. Total: *${formatAura(total)}*`
         }, { quoted: msg });
         return;
     }
@@ -821,11 +825,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         if (win) {
             await auraSystem.addAuraPoints(senderAuraKey, 500);
             const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
-            await sock.sendMessage(chatId, { text: `💪 Treino intenso! *+500* de aura. Total: *${total}*` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `💪 Treino intenso! *+${formatAura(500)}* de aura. Total: *${formatAura(total)}*` }, { quoted: msg });
         } else {
             await auraSystem.addAuraPoints(senderAuraKey, -1000);
             const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
-            await sock.sendMessage(chatId, { text: `💔 O treino foi além do limite. *-1000* de aura. Total: *${total}*` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `💔 O treino foi além do limite. *-${formatAura(1000)}* de aura. Total: *${formatAura(total)}*` }, { quoted: msg });
             await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
         }
         await auraSystem.setCooldown(senderAuraKey, 'lastTreinarAt', now);
@@ -846,7 +850,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         if (won) {
             await auraSystem.addAuraPoints(senderAuraKey, 1000);
             const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
-            await sock.sendMessage(chatId, { text: `👑 Dominação absoluta! *+1000* de aura. Total: *${total}*` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `👑 Dominação absoluta! *+${formatAura(1000)}* de aura. Total: *${formatAura(total)}*` }, { quoted: msg });
         } else {
             await sock.sendMessage(chatId, { text: `😤 A dominação falhou. Nenhuma aura obtida.` }, { quoted: msg });
         }
@@ -881,11 +885,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             if (won) {
                 await auraSystem.addAuraPoints(senderAuraKey, 5000);
                 const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
-                await sock.sendMessage(chatId, { text: `👑💀 *O ritual te abençoou.* +5000 de aura. Total: *${total}* 🔥` }).catch(() => {});
+                await sock.sendMessage(chatId, { text: `👑💀 *O ritual te abençoou.* +${formatAura(5000)} de aura. Total: *${formatAura(total)}* 🔥` }).catch(() => {});
             } else {
                 await auraSystem.addAuraPoints(senderAuraKey, -5000);
                 const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
-                await sock.sendMessage(chatId, { text: `💀🔥 *O ritual te consumiu.* -5000 de aura. Total: *${total}* 💀` }).catch(() => {});
+                await sock.sendMessage(chatId, { text: `💀🔥 *O ritual te consumiu.* -${formatAura(5000)} de aura. Total: *${formatAura(total)}* 💀` }).catch(() => {});
                 await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
             }
         }, delayEnd);
@@ -910,14 +914,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         await auraSystem.getUserAura(targetAuraKey);
         const result = await auraSystem.transferAura(senderAuraKey, targetAuraKey, 50);
         if (!result.ok) {
-            await sock.sendMessage(chatId, { text: '❌ Você precisa de pelo menos *50* de aura para usar !respeito.' }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *${formatAura(50)}* de aura para usar !respeito.` }, { quoted: msg });
             return;
         }
         await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
         const hadHelpMission = await auraSystem.hasMission(senderAuraKey, 'help_someone');
         if (hadHelpMission) await auraSystem.completeMission(senderAuraKey, 'help_someone');
         await sock.sendMessage(chatId, {
-            text: `🙏 Você transferiu *50* de aura como respeito.${hadHelpMission ? ` Missão "Ajude alguém" concluída: *+${MISSION_CONFIG.help_someone.reward}* aura.` : ''}`
+            text: `🙏 Você transferiu *${formatAura(50)}* de aura como respeito.${hadHelpMission ? ` Missão "Ajude alguém" concluída: *+${formatAura(MISSION_CONFIG.help_someone.reward)}* aura.` : ''}`
         }, { quoted: msg });
         return;
     }
@@ -946,7 +950,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         if (senderMention.mentions && senderMention.mentions.length > 0) mentions.push(...senderMention.mentions);
         if (targetMention.mentions && targetMention.mentions.length > 0) mentions.push(...targetMention.mentions);
         await sock.sendMessage(chatId, {
-            text: `🌟 ${senderMention.mentionText} elogiou ${targetMention.mentionText}! ${targetMention.mentionText} ganhou *+100* de aura.`,
+            text: `🌟 ${senderMention.mentionText} elogiou ${targetMention.mentionText}! ${targetMention.mentionText} ganhou *+${formatAura(100)}* de aura.`,
             mentions: mentions.length ? mentions : undefined
         }, { quoted: msg });
         return;
@@ -1060,19 +1064,19 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const senderAura = await auraSystem.getUserAura(senderAuraKey);
         const senderBalance = senderAura?.auraPoints ?? 0;
         if (senderBalance < amount) {
-            await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *${amount}* de aura para doar. Seu saldo: *${senderBalance}*` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *${formatAura(amount)}* de aura para doar. Seu saldo: *${formatAura(senderBalance)}*` }, { quoted: msg });
             return;
         }
         const result = await repo.transferAura(senderAuraKey, targetAuraKey, amount, true);
         if (!result.ok) {
             const current = (await auraSystem.getUserAura(senderAuraKey))?.auraPoints ?? senderBalance;
-            await sock.sendMessage(chatId, { text: `❌ Erro ao transferir aura. Seu saldo: *${current}*` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `❌ Erro ao transferir aura. Seu saldo: *${formatAura(current)}*` }, { quoted: msg });
             return;
         }
         levelSystem.invalidateCache();
         const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
         await sock.sendMessage(chatId, {
-            text: `💫 Você doou *${amount}* de aura para ${targetMention.mentionText}. Seu saldo: *${result.fromRemaining}*`,
+            text: `💫 Você doou *${formatAura(amount)}* de aura para ${targetMention.mentionText}. Seu saldo: *${formatAura(result.fromRemaining)}*`,
             mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
         }, { quoted: msg });
         await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
@@ -1101,14 +1105,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await auraSystem.addAuraPoints(senderAuraKey, 100);
             const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
             await sock.sendMessage(chatId, {
-                text: `🩸 Você farmou *100* de aura de ${targetMention.mentionText}. Você ganhou *+100* de aura.`,
+                text: `🩸 Você farmou *${formatAura(100)}* de aura de ${targetMention.mentionText}. Você ganhou *+${formatAura(100)}* de aura.`,
                 mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
             }, { quoted: msg });
             await checkAuraNegativeAndPunish(sock, chatId, targetAuraKey, contactsCache);
         } else {
             await auraSystem.addAuraPoints(senderAuraKey, -200);
             const total = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
-            await sock.sendMessage(chatId, { text: `💔 Falhou! Você perdeu *200* de aura. Total: *${total}*` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `💔 Falhou! Você perdeu *${formatAura(200)}* de aura. Total: *${formatAura(total)}*` }, { quoted: msg });
             await checkAuraNegativeAndPunish(sock, chatId, senderAuraKey, contactsCache);
         }
         return;
@@ -1127,14 +1131,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
     if (await auraSystem.hasMission(senderAuraKey, 'messages_500')) {
         const result = await auraSystem.incrementProgress(senderAuraKey, 'messages_500', 1);
         if (result) {
-            await sock.sendMessage(chatId, { text: `📬 Missão "Mande 50 mensagens" concluída! *+${result.reward}* aura.` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `📬 Missão "Mande 50 mensagens" concluída! *+${formatAura(result.reward)}* aura.` }, { quoted: msg });
         }
     }
 
     if (auraSystem.isMediaMessage(msg) && await auraSystem.hasMission(senderAuraKey, 'send_media')) {
         const result = await auraSystem.incrementProgress(senderAuraKey, 'send_media', 1);
         if (result) {
-            await sock.sendMessage(chatId, { text: `📎 Missão "Envie mídia" concluída! *+${result.reward}* aura.` }, { quoted: msg });
+            await sock.sendMessage(chatId, { text: `📎 Missão "Envie mídia" concluída! *+${formatAura(result.reward)}* aura.` }, { quoted: msg });
         }
     }
 
@@ -1205,7 +1209,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const target = cfg?.target ?? 1;
             const reward = cfg?.reward ?? 0;
             text += `${done ? '✅' : '⬜'} *${cfg?.label || id}*\n`;
-            text += `   ${done ? 'Concluída' : `${val}/${target}`} → *+${reward}* aura\n\n`;
+            text += `   ${done ? 'Concluída' : `${val}/${target}`} → *+${formatAura(reward)}* aura\n\n`;
         });
         await sock.sendMessage(chatId, { text }, { quoted: msg });
         return;
@@ -1234,7 +1238,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             const r = ranking[i];
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
             text += `${medal} ${mentionTexts[i]}\n`;
-            text += `   📊 Categoria: *${r.tierName}*  │  💫 *${r.auraPoints}* aura\n\n`;
+            text += `   📊 Categoria: *${r.tierName}*  │  💫 *${formatAura(r.auraPoints)}* aura\n\n`;
         }
         text += `—— *Categorias (níveis)* ——\n`;
         text += `0 = NPC · 500 = Presença · 2.000 = Dominante · 5.000 = Sigma · 10.000 = Entidade · 50.000 = Deus do chat`;
@@ -1276,7 +1280,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const drawn = user.dailyMissions?.drawnMissions || [];
         const completed = user.dailyMissions?.completedMissionIds || [];
         let text = `✨ *${titleLine}*\n\n`;
-        text += `💫 Aura: *${user.auraPoints}*  │  📈 Nível: *${tier.name}*\n`;
+        text += `💫 Aura: *${formatAura(user.auraPoints)}*  │  📈 Nível: *${tier.name}*\n`;
         text += user.character ? `🎭 Personagem: *${user.character}*\n` : '';
         text += user.stickerHash ? '🖼 Figurinha de aura: definida\n' : '🖼 Figurinha de aura: não definida\n';
         text += `\n📋 Missões de hoje (${completed.length}/3) – reset 00:00\n`;
@@ -1369,7 +1373,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                         arr.slice(-MAX_AURA_STICKER_IDS / 2).forEach(id => processedAuraStickerIds.add(id));
                     }
                     const newTotal = await auraSystem.addAuraPoints(senderAuraKey, 100);
-                    await sock.sendMessage(chatId, { text: `✨ +100 de aura! Total: *${newTotal}*` }, { quoted: msg });
+                    await sock.sendMessage(chatId, { text: `✨ +${formatAura(100)} de aura! Total: *${formatAura(newTotal)}*` }, { quoted: msg });
                 }
             }
         }
@@ -1393,7 +1397,7 @@ async function handleAuraReaction(sock, item) {
     const result = await auraSystem.incrementProgress(senderAuraKey, 'reactions_500', 1);
     if (result) {
         await sock.sendMessage(chatId, {
-            text: `💀 Missão "Reaja 20x com 💀 ou ☠️" concluída! *+${result.reward}* aura.`
+            text: `💀 Missão "Reaja 20x com 💀 ou ☠️" concluída! *+${formatAura(result.reward)}* aura.`
         }).catch(() => {});
     }
 }
