@@ -1256,7 +1256,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         }
         let targetKey;
         if (isMe) {
-            targetKey = senderAuraKey;
+            targetKey = await getAuraKey(senderAuraKey);
         } else {
             targetKey = await repo.findUserIdByJid(mentionedJid);
             if (!targetKey) {
@@ -1264,7 +1264,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 return;
             }
         }
-        const targetNumber = isMe ? number : getUserIdNumber(targetKey);
+        const targetNumber = getUserIdNumber(targetKey);
         const user = await auraSystem.getUserAura(targetKey, { createIfMissing: false });
         if (!user) {
             await sock.sendMessage(chatId, { text: '❌ Esse usuário ainda não tem dados de aura no sistema.' }, { quoted: msg });
