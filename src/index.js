@@ -172,6 +172,17 @@ async function connectBot() {
     sock.ev.on("messages.upsert", (evt) => {
       const list = evt?.messages || (Array.isArray(evt) ? evt : [evt]);
       for (const m of list) {
+        const key = m?.key || {};
+        console.log("[BAILEYS] messages.upsert:", JSON.stringify({
+          type: evt?.type,
+          remoteJid: key.remoteJid,
+          fromMe: key.fromMe,
+          id: key.id,
+          participant: key.participant,
+          participantAlt: key.participantAlt,
+          pushName: m?.pushName,
+          messageTimestamp: m?.messageTimestamp,
+        }, null, 2));
         messageQueue.push({ messages: [m] });
       }
       console.log("[FILA] Mensagem(ns) enfileirada(s). Total na fila:", messageQueue.length);

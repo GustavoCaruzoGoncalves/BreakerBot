@@ -489,7 +489,8 @@ async function amigoSecretoCommandBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (comando === 'add') {
-        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const rawMentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const mentionedJid = await Promise.all(rawMentions.map(r => repo.findUserIdByJid(r).then(id => id || r)));
         
         const palavras = textMessage.toLowerCase().split(/\s+/);
         const incluirAdmin = palavras.includes('me') || palavras.includes('eu');

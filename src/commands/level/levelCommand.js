@@ -134,7 +134,7 @@ class LevelSystem {
 
     async writeUsersData(data) {
         try {
-            await repo.saveAllUsers(data);
+            await repo.saveAllUsers(data, { writeScope: 'level' });
             levelCache.users = data;
         } catch (error) {
             console.error('Erro ao salvar dados dos usuários:', error);
@@ -751,16 +751,13 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         }
         processedMessageIds.add(msgId);
 
-        const sender = isGroup ? (m.key.participantAlt || m.key.participant || chatId) : chatId;
-        const participantJid = m.key.participantAlt || m.key.participant || sender;
-        const pushName = m.pushName || contactsCache[sender]?.notify || contactsCache[sender]?.name || null;
-        const jidToSave = isGroup ? (m.key.participant || null) : (m.key.remoteJidAlt || null);
+        const canonicalUserId = await repo.resolveCanonicalUserId(m.key);
+        if (!canonicalUserId) continue;
+        const pushName = m.pushName || contactsCache[canonicalUserId]?.notify || contactsCache[canonicalUserId]?.name || null;
+        const jidToSave = isGroup ? (m.key.participant?.endsWith('@lid') ? m.key.participant : null) : (m.key.remoteJidAlt || null);
 
         const usersData = await levelSystem.getOrLoadCache();
-        const canonicalUserId = levelSystem.findUserKey(usersData, participantJid)
-            || (participantJid.endsWith('@lid') ? await repo.findUserByJid(participantJid) : null)
-            || participantJid;
-        const userJid = canonicalUserId;
+        const userJid = levelSystem.findUserKey(usersData, canonicalUserId) || canonicalUserId;
 
         const isDailyBonus = await levelSystem.checkDailyBonus(userJid, pushName, true);
         const xpResult = await levelSystem.addXPToCache(userJid, 10, isDailyBonus, pushName);
@@ -771,11 +768,11 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
                 lastMessageTime: null, badges: [], lastPrestigeLevel: 0, levelHistory: [],
                 dailyBonusMultiplier: 0, dailyBonusExpiry: null, allowMentions: false,
                 pushName: pushName || null, customName: null, customNameEnabled: false,
-                jid: (jidToSave && !jidToSave.endsWith('@lid')) ? jidToSave : userJid,
+                jid: jidToSave?.endsWith('@lid') ? jidToSave : userJid,
                 profilePicture: null, profilePictureUpdatedAt: null
             };
         } else {
-            if (jidToSave && !jidToSave.endsWith('@lid')) {
+            if (jidToSave?.endsWith('@lid')) {
                 if (!usersData[userJid].jid || usersData[userJid].jid !== jidToSave) usersData[userJid].jid = jidToSave;
             }
             if (pushName && (!usersData[userJid].pushName || usersData[userJid].pushName !== pushName)) usersData[userJid].pushName = pushName;
@@ -784,7 +781,7 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         if (xpResult.isLevelUp) {
             const prev = levelUpsByUser.get(userJid);
             if (!prev || xpResult.newLevel > prev.newLevel) {
-                levelUpsByUser.set(userJid, { ...xpResult, chatId, sender });
+                levelUpsByUser.set(userJid, { ...xpResult, chatId, sender: userJid });
             }
         }
     }
@@ -839,9 +836,9 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         }
     }
 
-    updateUserProfilePicture(sock, msgList[0] ? (msgList[0].key.participantAlt || msgList[0].key.participant || chatId) : null, await levelSystem.getOrLoadCache(), levelSystem).catch(() => {});
+    updateUserProfilePicture(sock, msgList[0] ? (await repo.resolveCanonicalUserId(msgList[0].key)) : null, await levelSystem.getOrLoadCache(), levelSystem).catch(() => {});
 
-    const sender = isGroup ? (msg.key.participantAlt || msg.key.participant || chatId) : chatId;
+    const sender = await repo.resolveCanonicalUserId(msg.key) || (isGroup ? (msg.key.participantAlt || msg.key.participant || chatId) : chatId);
     const textMessage = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
     const isExcludedCommand = excludedCommands.some(cmd => textMessage.toLowerCase().startsWith(cmd.toLowerCase()));
 
@@ -912,12 +909,12 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         }
 
         const targetUser = parts[1];
-        let targetUserId;
+        let mentionedJid;
 
         if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentions.length > 0) {
-                targetUserId = mentions[0];
+                mentionedJid = mentions[0];
             } else {
                 await sock.sendMessage(chatId, {
                     text: "❌ Usuário não encontrado na menção!"
@@ -927,6 +924,14 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         } else {
             await sock.sendMessage(chatId, {
                 text: "❌ Você deve mencionar um usuário! Use: !info @usuario"
+            }, { quoted: msg });
+            return;
+        }
+
+        const targetUserId = await repo.findUserIdByJid(mentionedJid);
+        if (!targetUserId) {
+            await sock.sendMessage(chatId, {
+                text: "❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda."
             }, { quoted: msg });
             return;
         }
@@ -1109,7 +1114,13 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentions.length > 0) {
-                targetUserId = mentions[0];
+                targetUserId = await repo.findUserIdByJid(mentions[0]);
+                if (!targetUserId) {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda."
+                    }, { quoted: msg });
+                    return;
+                }
             } else {
                 await sock.sendMessage(chatId, {
                     text: "❌ Usuário não encontrado na menção!"
@@ -1169,7 +1180,13 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
         } else if (targetUser.startsWith('@')) {
             const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
             if (mentions.length > 0) {
-                targetUserId = mentions[0];
+                targetUserId = await repo.findUserIdByJid(mentions[0]);
+                if (!targetUserId) {
+                    await sock.sendMessage(chatId, {
+                        text: "❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda."
+                    }, { quoted: msg });
+                    return;
+                }
             } else {
                 await sock.sendMessage(chatId, {
                     text: "❌ Usuário não encontrado na menção!"
@@ -1214,7 +1231,13 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
             } else if (targetUser.startsWith('@')) {
                 const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 if (mentions.length > 0) {
-                    targetUserId = mentions[0];
+                    targetUserId = await repo.findUserIdByJid(mentions[0]);
+                    if (!targetUserId) {
+                        await sock.sendMessage(chatId, {
+                            text: "❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda."
+                        }, { quoted: msg });
+                        return;
+                    }
                 } else {
                     await sock.sendMessage(chatId, {
                         text: "❌ Usuário não encontrado na menção!"

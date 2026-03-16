@@ -391,16 +391,118 @@ async function findUserByJid(jid) {
     return r.rows[0]?.user_id ?? null;
 }
 
-/** Incremento atômico de aura_points (evita conflito com cache do level) */
-async function incrementAuraPoints(jidOrUserId, amount) {
-    const userId = await findUserByJid(jidOrUserId) || jidOrUserId;
-    const amt = Number(amount) || 0;
+/** Busca user_id pelo campo jid. Normaliza: se vier só número, busca como X@lid. Remove chars invisíveis (U+200B etc.) do jid no DB antes de comparar. */
+async function findUserIdByJid(jid) {
+    if (!jid) return null;
+    const jidStr = String(jid).trim();
+    const toSearch = jidStr.includes('@') ? jidStr : `${jidStr}@lid`;
     const r = await query(
-        `UPDATE aura SET aura_points = GREATEST(0, COALESCE(aura_points, 0) + $2::int)
+        `SELECT user_id FROM users
+         WHERE jid = $1
+            OR replace(replace(replace(replace(COALESCE(jid,''), chr(8203), ''), chr(8204), ''), chr(8205), ''), chr(65279), '') = $1
+         ORDER BY CASE WHEN user_id LIKE '%@s.whatsapp.net' THEN 0 ELSE 1 END, user_id
+         LIMIT 1`,
+        [toSearch]
+    );
+    return r.rows[0]?.user_id ?? null;
+}
+
+/**
+ * Resolve o user_id canônico a partir da key da mensagem.
+ * Grupo: usa participantAlt (@s.whatsapp.net); se vazio, resolve participant (LID) via jid no banco.
+ * DM: usa remoteJid (é o usuário do chat).
+ */
+async function resolveCanonicalUserId(key) {
+    if (!key?.remoteJid) return null;
+    const chatId = key.remoteJid;
+    const isGroup = chatId.endsWith('@g.us');
+    if (isGroup) {
+        const alt = key.participantAlt;
+        const part = key.participant;
+        if (alt && alt.endsWith('@s.whatsapp.net')) return alt;
+        if (part && part.endsWith('@lid')) {
+            const resolved = await findUserIdByJid(part);
+            if (resolved) return resolved;
+        }
+        return alt || part || chatId;
+    }
+    return chatId;
+}
+
+/** Resolve jid/auraKey para user_id canônico (mesma lógica do getCanonicalUserKey no aura). */
+async function resolveAuraUserId(jidOrKey) {
+    if (!jidOrKey) return null;
+    const direct = await findUserByJid(jidOrKey);
+    if (direct) return direct;
+    const users = await getAllUsers();
+    if (users[jidOrKey]) return jidOrKey;
+    for (const [userId, userData] of Object.entries(users)) {
+        if (!userData || typeof userId !== 'string' || !userId.includes('@')) continue;
+        if (userData.jid === jidOrKey) return userId;
+    }
+    const num = String(jidOrKey).split('@')[0].split(':')[0];
+    const possibleJid = num ? `${num}@s.whatsapp.net` : null;
+    if (possibleJid && users[possibleJid]) return possibleJid;
+    return null;
+}
+
+/** Garante que existe linha em aura para o user_id (cria com 0 se não existir). */
+async function ensureAuraRow(userId) {
+    await query(
+        `INSERT INTO aura (user_id, aura_points, updated_at)
+         VALUES ($1, 0, NOW())
+         ON CONFLICT (user_id) DO NOTHING`,
+        [userId]
+    );
+}
+
+/** Incremento atômico de aura_points (evita conflito com cache do level).
+ * Usa upsert para criar linha em aura se não existir (ex: usuário web sem aura prévia). */
+async function incrementAuraPoints(jidOrUserId, amount) {
+    const userId = await resolveAuraUserId(jidOrUserId) || findUserByJid(jidOrUserId) || jidOrUserId;
+    const amt = Number(amount) || 0;
+    await ensureAuraRow(userId);
+    const r = await query(
+        `UPDATE aura SET aura_points = GREATEST(0, COALESCE(aura_points, 0) + $2::int), updated_at = NOW()
          WHERE user_id = $1 RETURNING aura_points`,
         [userId, amt]
     );
     return r.rows[0]?.aura_points ?? null;
+}
+
+/** Retorna aura_points diretamente do banco para um user_id. */
+async function getAuraPoints(userId) {
+    const resolved = await resolveAuraUserId(userId) || findUserByJid(userId) || userId;
+    const r = await query(
+        `SELECT aura_points FROM aura WHERE user_id = $1`,
+        [resolved]
+    );
+    return r.rows[0] ? Number(r.rows[0].aura_points) : 0;
+}
+
+/** Transfere aura de um usuário para outro (usa incrementAuraPoints para persistir no banco).
+ * Se skipBalanceCheck=true, confia no caller (ex: aura command já validou com getUserAura). */
+async function transferAura(fromJidOrUserId, toJidOrUserId, amount, skipBalanceCheck = false) {
+    const fromId = await resolveAuraUserId(fromJidOrUserId) || findUserByJid(fromJidOrUserId) || fromJidOrUserId;
+    const toId = await resolveAuraUserId(toJidOrUserId) || findUserByJid(toJidOrUserId) || toJidOrUserId;
+    const amt = Math.floor(Number(amount) || 0);
+    if (amt < 1) return { ok: false, reason: 'invalid_amount' };
+    if (!skipBalanceCheck) {
+        const fromBalance = await getAuraPoints(fromId);
+        if (fromBalance < amt) return { ok: false, reason: 'insufficient' };
+    }
+    const deduct = await incrementAuraPoints(fromId, -amt);
+    if (deduct === null) return { ok: false, reason: 'deduct_failed' };
+    const add = await incrementAuraPoints(toId, amt);
+    if (add === null) {
+        await incrementAuraPoints(fromId, amt);
+        return { ok: false, reason: 'add_failed' };
+    }
+    return {
+        ok: true,
+        fromRemaining: deduct,
+        toNew: add
+    };
 }
 
 async function updateAura(userId, auraData) {
@@ -445,26 +547,67 @@ async function updateAura(userId, auraData) {
 }
 
 /**
- * Campos de preferência do usuário (editáveis pelo site). Ao salvar via saveAllUsers
- * (usado pelo bot com cache), preservamos os valores do DB para não sobrescrever
- * alterações feitas pelo painel web.
+ * Domínios de dados - cada sistema grava APENAS o que controla.
+ * O cache NUNCA sobrescreve dados de outros domínios.
+ *
+ * LEVEL: xp, level, prestige, badges, etc. (tabela users)
+ * PREFERENCES: allowMentions, pushName, customName, profilePicture, etc. (tabela users)
+ * AURA: aura_points, daily_missions, sticker, etc. (tabela aura)
  */
-const PREFERENCE_FIELDS = ['allowMentions', 'pushName', 'customName', 'customNameEnabled'];
+const LEVEL_FIELDS = [
+    'xp', 'level', 'prestige', 'prestigeAvailable', 'totalMessages', 'lastMessageTime',
+    'lastPrestigeLevel', 'dailyBonusMultiplier', 'dailyBonusExpiry', 'badges', 'levelHistory'
+];
+const PREFERENCE_FIELDS = [
+    'allowMentions', 'pushName', 'customName', 'customNameEnabled', 'jid',
+    'profilePicture', 'profilePictureUpdatedAt', 'emoji', 'emojiReaction'
+];
 
-async function saveAllUsers(usersData) {
+/**
+ * Salva dados de usuários com escopo definido. O banco é a fonte da verdade:
+ * cada domínio grava apenas seus campos, preservando o resto do DB.
+ *
+ * @param {Record<string, object>} usersData
+ * @param {{ writeScope?: 'level'|'aura'|'preferences'|'all' }} [options]
+ *   - level: só grava campos de level (xp, badges, etc). NUNCA toca aura.
+ *   - aura: só grava tabela aura. NUNCA toca users.
+ *   - preferences: só grava preferências (allowMentions, profilePicture, etc).
+ *   - all: overwrite completo (apenas para import admin)
+ */
+async function saveAllUsers(usersData, options = {}) {
+    const writeScope = options.writeScope || 'all';
+
     for (const [userId, userData] of Object.entries(usersData)) {
         if (typeof userId !== 'string' || !userId.includes('@')) continue;
         const existing = await getUserById(userId);
+
         if (existing) {
-            const merged = { ...userData };
-            for (const field of PREFERENCE_FIELDS) {
-                if (existing[field] !== undefined) {
-                    merged[field] = existing[field];
-                }
+            if (writeScope === 'aura') {
+                if (userData?.aura) await updateAura(userId, userData.aura);
+                continue;
             }
-            await updateUser(userId, merged);
-            if (userData && userData.aura) {
-                await updateAura(userId, userData.aura);
+
+            if (writeScope === 'level') {
+                const merged = { ...existing };
+                for (const f of LEVEL_FIELDS) {
+                    if (userData[f] !== undefined) merged[f] = userData[f];
+                }
+                await updateUser(userId, merged);
+                continue;
+            }
+
+            if (writeScope === 'preferences') {
+                const merged = { ...existing };
+                for (const f of PREFERENCE_FIELDS) {
+                    if (userData[f] !== undefined) merged[f] = userData[f];
+                }
+                await updateUser(userId, merged);
+                continue;
+            }
+
+            if (writeScope === 'all') {
+                await updateUser(userId, userData);
+                if (userData?.aura) await updateAura(userId, userData.aura);
             }
         } else {
             await createUser(userId, userData);
@@ -885,7 +1028,13 @@ module.exports = {
     deleteUser,
     restoreUser,
     findUserByJid,
+    findUserIdByJid,
+    resolveCanonicalUserId,
+    resolveAuraUserId,
     incrementAuraPoints,
+    getAuraPoints,
+    transferAura,
+    ensureAuraRow,
     saveAllUsers,
     updateAura,
     getDailyBonus,

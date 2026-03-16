@@ -1,5 +1,4 @@
 const path = require('path');
-const util = require('util');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const mentionsController = require('../../controllers/mentionsController');
 const repo = require('../../database/repository');
@@ -215,7 +214,7 @@ async function readUsersDataForAura() {
 
 async function writeUsersDataForAura(usersData) {
     try {
-        await repo.saveAllUsers(usersData);
+        await repo.saveAllUsers(usersData, { writeScope: 'aura' });
     } catch (error) {
         console.error('[AURA] Erro ao salvar users:', error);
         throw error;
@@ -288,11 +287,12 @@ class AuraSystem {
         return auraObj;
     }
 
-    initUser(usersData, number) {
+    initUser(usersData, number, createIfMissing = true) {
         if (number === AURA_GLOBAL_KEY || number == null) return null;
         const numStr = typeof number === 'string' ? number : String(number);
         if (!numStr.includes('@')) return null;
         if (!usersData[numStr]) {
+            if (!createIfMissing) return null;
             usersData[numStr] = {
                 xp: 0,
                 level: 1,
@@ -329,10 +329,12 @@ class AuraSystem {
         return aura;
     }
 
-    async getUserAura(number) {
+    async getUserAura(number, options = {}) {
+        const createIfMissing = options.createIfMissing !== false;
         const usersData = await readUsersDataForAura();
+        if (!usersData[number] && !createIfMissing) return null;
         const before = usersData[number]?.aura?.dailyMissions?.lastResetDate;
-        const aura = this.initUser(usersData, number);
+        const aura = this.initUser(usersData, number, createIfMissing);
         if (!aura) return null;
         const after = aura.dailyMissions.lastResetDate;
         if (before !== after) await writeUsersDataForAura(usersData);
@@ -603,11 +605,11 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
 
     const chatId = msg.key.remoteJid;
     const isGroup = chatId.endsWith('@g.us');
-    const sender = isGroup ? (msg.key.participantAlt || msg.key.participant || chatId) : chatId;
+    const sender = await repo.resolveCanonicalUserId(msg.key) || (isGroup ? (msg.key.participantAlt || msg.key.participant || chatId) : chatId);
     const number = getUserIdNumber(sender);
     if (!number) return;
     if (msg.key.fromMe) return;
-    const senderAuraKey = await getAuraKey(sender);
+    const senderAuraKey = sender;
 
     const messageType = Object.keys(msg.message)[0];
     const textMessage = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
@@ -702,14 +704,18 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!mog* marcando alguém: *!mog @usuario*' }, { quoted: msg });
             return;
         }
-        const fromKey = getCanonicalUserKey(sender) || sender;
-        const toKey = getCanonicalUserKey(mentionedJid) || mentionedJid;
+        const toKey = await repo.findUserIdByJid(mentionedJid);
+        if (!toKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
+        const fromKey = sender;
         if (fromKey === toKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode mogar a si mesmo.' }, { quoted: msg });
             return;
         }
-        await auraSystem.addPendingMog(chatId, { fromKey, toKey, toJid: mentionedJid });
-        const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
+        await auraSystem.addPendingMog(chatId, { fromKey, toKey, toJid: toKey });
+        const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(toKey), contactsCache);
         await sock.sendMessage(chatId, {
             text: `⚔️ Desafio de duelo! ${mentionInfo.mentionText} pode aceitar respondendo *!mog aceitar*. Quem mandar mais mensagens em 15 segundos vence e ganha 500 de aura.`,
             mentions: (mentionInfo.mentions && mentionInfo.mentions.length > 0) ? mentionInfo.mentions : undefined
@@ -727,9 +733,13 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Já há um ataque em andamento neste chat.' }, { quoted: msg });
             return;
         }
-        const attackerKey = getCanonicalUserKey(sender) || sender;
-        const targetKey = getCanonicalUserKey(mentionedJid) || mentionedJid;
-        if (attackerKey === targetKey || getUserIdNumber(sender) === getUserIdNumber(mentionedJid)) {
+        const targetKey = await repo.findUserIdByJid(mentionedJid);
+        if (!targetKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
+        const attackerKey = sender;
+        if (attackerKey === targetKey || getUserIdNumber(sender) === getUserIdNumber(targetKey)) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode atacar a si mesmo.' }, { quoted: msg });
             return;
         }
@@ -741,7 +751,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
                 sock.sendMessage(chatId, { text: `${i}` }).catch(() => {});
             }, (MOGNOW_COUNTDOWN_SEC - i) * 1000);
         }
-        const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
+        const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(targetKey), contactsCache);
         setTimeout(() => {
             sock.sendMessage(chatId, {
                 text: `💀 *MOGNOW!* ${mentionInfo.mentionText} — *15 segundos*: quem mandar *mais mensagens* vence. Alvo ganha 500 de aura (e missão) se vencer; atacante ganha 5 se vencer.`,
@@ -886,8 +896,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!respeito* marcando alguém: *!respeito @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = await getAuraKey(mentionedJid);
-        if (!targetAuraKey || targetAuraKey === senderAuraKey) {
+        const targetAuraKey = await repo.findUserIdByJid(mentionedJid);
+        if (!targetAuraKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
+        if (targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode dar respeito a si mesmo.' }, { quoted: msg });
             return;
         }
@@ -912,8 +926,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!elogiar* marcando alguém: *!elogiar @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = await getAuraKey(mentionedJid);
-        if (!targetAuraKey || targetAuraKey === senderAuraKey) {
+        const targetAuraKey = await repo.findUserIdByJid(mentionedJid);
+        if (!targetAuraKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
+        if (targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode elogiar a si mesmo.' }, { quoted: msg });
             return;
         }
@@ -921,7 +939,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         await auraSystem.addAuraPoints(targetAuraKey, 100);
         await addPraise(senderAuraKey, targetAuraKey);
         const senderMention = await mentionsController.processSingleMention(await getJidForMention(sender), contactsCache);
-        const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
+        const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
         const mentions = [];
         if (senderMention.mentions && senderMention.mentions.length > 0) mentions.push(...senderMention.mentions);
         if (targetMention.mentions && targetMention.mentions.length > 0) mentions.push(...targetMention.mentions);
@@ -938,12 +956,17 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!provocar* marcando alguém: *!provocar @usuario*' }, { quoted: msg });
             return;
         }
-        if (getCanonicalUserKey(sender) === getCanonicalUserKey(mentionedJid) || getUserIdNumber(sender) === getUserIdNumber(mentionedJid)) {
+        const targetKey = await repo.findUserIdByJid(mentionedJid);
+        if (!targetKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
+        if (sender === targetKey || getUserIdNumber(sender) === getUserIdNumber(targetKey)) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode provocar a si mesmo.' }, { quoted: msg });
             return;
         }
         const senderMention = await mentionsController.processSingleMention(await getJidForMention(sender), contactsCache);
-        const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
+        const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetKey), contactsCache);
         const mentions = [];
         if (senderMention.mentions && senderMention.mentions.length > 0) mentions.push(...senderMention.mentions);
         if (targetMention.mentions && targetMention.mentions.length > 0) mentions.push(...targetMention.mentions);
@@ -981,10 +1004,14 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!elogiados me* ou *!elogiados @usuario* para ver quem elogiou.' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = await getAuraKey(mentionedJid);
+        const targetAuraKey = await repo.findUserIdByJid(mentionedJid);
+        if (!targetAuraKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
         const list = await getWhoPraised(targetAuraKey);
         const uniqueJids = [...new Set(list)];
-        const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
+        const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
         if (uniqueJids.length === 0) {
             await sock.sendMessage(chatId, {
                 text: `📋 Ninguém elogiou ${targetMention.mentionText} ainda.`,
@@ -1019,18 +1046,28 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Informe um valor válido (número inteiro maior que 0). Ex: *!aura doar 100 @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = await getAuraKey(mentionedJid);
-        if (!targetAuraKey || targetAuraKey === senderAuraKey) {
+        const targetAuraKey = await repo.findUserIdByJid(mentionedJid);
+        if (!targetAuraKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
+        if (targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode doar aura para si mesmo.' }, { quoted: msg });
             return;
         }
-        await auraSystem.getUserAura(targetAuraKey);
-        const result = await auraSystem.transferAura(senderAuraKey, targetAuraKey, amount);
-        if (!result.ok) {
-            const current = (await auraSystem.getUserAura(senderAuraKey)).auraPoints;
-            await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *${amount}* de aura para doar. Seu saldo: *${current}*` }, { quoted: msg });
+        const senderAura = await auraSystem.getUserAura(senderAuraKey);
+        const senderBalance = senderAura?.auraPoints ?? 0;
+        if (senderBalance < amount) {
+            await sock.sendMessage(chatId, { text: `❌ Você precisa de pelo menos *${amount}* de aura para doar. Seu saldo: *${senderBalance}*` }, { quoted: msg });
             return;
         }
+        const result = await repo.transferAura(senderAuraKey, targetAuraKey, amount, true);
+        if (!result.ok) {
+            const current = (await auraSystem.getUserAura(senderAuraKey))?.auraPoints ?? senderBalance;
+            await sock.sendMessage(chatId, { text: `❌ Erro ao transferir aura. Seu saldo: *${current}*` }, { quoted: msg });
+            return;
+        }
+        levelSystem.invalidateCache();
         const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
         await sock.sendMessage(chatId, {
             text: `💫 Você doou *${amount}* de aura para ${targetMention.mentionText}. Seu saldo: *${result.fromRemaining}*`,
@@ -1046,8 +1083,12 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!aura farmar* marcando alguém: *!aura farmar @usuario*' }, { quoted: msg });
             return;
         }
-        const targetAuraKey = await getAuraKey(mentionedJid);
-        if (!targetAuraKey || targetAuraKey === senderAuraKey) {
+        const targetAuraKey = await repo.findUserIdByJid(mentionedJid);
+        if (!targetAuraKey) {
+            await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+            return;
+        }
+        if (targetAuraKey === senderAuraKey) {
             await sock.sendMessage(chatId, { text: '⚠️ Você não pode farmar aura de si mesmo.' }, { quoted: msg });
             return;
         }
@@ -1056,7 +1097,7 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         if (success) {
             await auraSystem.addAuraPoints(targetAuraKey, -100);
             await auraSystem.addAuraPoints(senderAuraKey, 100);
-            const targetMention = await mentionsController.processSingleMention(await getJidForMention(mentionedJid), contactsCache);
+            const targetMention = await mentionsController.processSingleMention(await getJidForMention(targetAuraKey), contactsCache);
             await sock.sendMessage(chatId, {
                 text: `🩸 Você farmou *100* de aura de ${targetMention.mentionText}. Você ganhou *+100* de aura.`,
                 mentions: (targetMention.mentions && targetMention.mentions.length > 0) ? targetMention.mentions : undefined
@@ -1203,46 +1244,24 @@ async function auraCommandBot(sock, { messages }, contactsCache = {}) {
         const trimmed = textMessage.trim();
         const isMe = /^!aura\s+info\s+me\s*$/i.test(trimmed);
         const mentionedJid = getMentionedJid(msg);
-        if (mentionedJid) {
-            console.log('[BAILEYS MENTION] Payload completo quando alguém é mencionado:');
-            console.log(util.inspect(msg, { depth: 10, showHidden: false, colors: false }));
-        }
         if (!isMe && !mentionedJid) {
             await sock.sendMessage(chatId, { text: '⚠️ Use *!aura info me* para suas informações ou *!aura info @usuario* para ver de alguém.' }, { quoted: msg });
             return;
         }
-        const targetKey = isMe ? senderAuraKey : await getAuraKey(mentionedJid);
-        const targetNumber = isMe ? number : getUserIdNumber(targetKey);
-        const user = await auraSystem.getUserAura(targetKey);
-        console.log('[AURA INFO]', {
-            isMe,
-            mentionedJid: mentionedJid || '(n/a)',
-            senderAuraKey: isMe ? senderAuraKey : '(n/a)',
-            targetKey: targetKey || '(null)',
-            targetNumber: targetNumber || '(null)',
-            userFound: !!user,
-            targetKeyIncludesAt: targetKey ? targetKey.includes('@') : false
-        });
-        if (!user) {
-            try {
-                const allUsers = await repo.getAllUsers();
-                const keys = Object.keys(allUsers).filter(k => typeof k === 'string' && k.includes('@') && !k.endsWith('@g.us'));
-                const findById = targetKey ? await repo.getUserById(targetKey) : null;
-                const findByJidTarget = targetKey ? await repo.findUserByJid(targetKey) : null;
-                const findByJidMentioned = mentionedJid ? await repo.findUserByJid(mentionedJid) : null;
-                const matchingKeys = keys.filter(k => k === targetKey || k === mentionedJid || (targetNumber && k.startsWith(targetNumber + '@')) || (mentionedJid && allUsers[k]?.jid === mentionedJid));
-                console.log('[AURA INFO] FALHA - debug:', {
-                    totalUsers: keys.length,
-                    targetKeyExistsInAllUsers: targetKey ? targetKey in allUsers : false,
-                    findUserById: !!findById,
-                    findUserByJid_targetKey: findByJidTarget,
-                    findUserByJid_mentionedJid: findByJidMentioned,
-                    matchingKeys: matchingKeys.slice(0, 5)
-                });
-            } catch (e) {
-                console.error('[AURA INFO] Erro no debug:', e.message);
+        let targetKey;
+        if (isMe) {
+            targetKey = senderAuraKey;
+        } else {
+            targetKey = await repo.findUserIdByJid(mentionedJid);
+            if (!targetKey) {
+                await sock.sendMessage(chatId, { text: '❌ Usuário não encontrado no banco. O usuário mencionado pode não ter interagido com o bot ainda.' }, { quoted: msg });
+                return;
             }
-            await sock.sendMessage(chatId, { text: '❌ Não foi possível carregar as informações de aura.' }, { quoted: msg });
+        }
+        const targetNumber = isMe ? number : getUserIdNumber(targetKey);
+        const user = await auraSystem.getUserAura(targetKey, { createIfMissing: false });
+        if (!user) {
+            await sock.sendMessage(chatId, { text: '❌ Esse usuário ainda não tem dados de aura no sistema.' }, { quoted: msg });
             return;
         }
         const mentionInfo = await mentionsController.processSingleMention(await getJidForMention(targetKey), contactsCache);
@@ -1363,11 +1382,11 @@ async function handleAuraReaction(sock, item) {
     const chatId = msgKey.remoteJid;
     if (!chatId) return;
     const isGroup = chatId.endsWith('@g.us');
-    const sender = isGroup ? (msgKey.participant || msgKey.participantAlt) : chatId;
+    const sender = await repo.resolveCanonicalUserId(msgKey) || (isGroup ? (msgKey.participantAlt || msgKey.participant) : chatId);
     if (!sender) return;
     const reactionText = reaction?.text || '';
     if (reactionText !== '💀' && reactionText !== '☠️') return;
-    const senderAuraKey = await getAuraKey(sender);
+    const senderAuraKey = sender;
     if (!senderAuraKey || !(await auraSystem.hasMission(senderAuraKey, 'reactions_500'))) return;
     const result = await auraSystem.incrementProgress(senderAuraKey, 'reactions_500', 1);
     if (result) {

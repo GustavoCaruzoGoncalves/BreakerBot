@@ -28,7 +28,7 @@ async function readUsersData() {
 
 async function writeUsersData(data) {
     try {
-        await repo.saveAllUsers(data);
+        await repo.saveAllUsers(data, { writeScope: 'preferences' });
     } catch (error) {
         console.error('Erro ao salvar dados dos usuários:', error);
     }

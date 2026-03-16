@@ -18,7 +18,7 @@ async function loadUsersData() {
 
 async function saveUsersData(data) {
     try {
-        await repo.saveAllUsers(data);
+        await repo.saveAllUsers(data, { writeScope: 'preferences' });
     } catch (err) {
         console.error('[PFP] Erro ao salvar users:', err);
     }
@@ -331,7 +331,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid;
 
         if (mentionedJid && mentionedJid.length > 0) {
-            const userToMention = mentionedJid[0];
+            const rawJid = mentionedJid[0];
+            const userToMention = (await repo.findUserIdByJid(rawJid)) || rawJid;
             const mentionInfo = await mentionsController.processSingleMention(userToMention, contactsCache);
             let percentage = getRandomPercentage();
             let replyText;
@@ -514,7 +515,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
         const isSpecial = Math.random() < 0.01;
         
         if (mentionedJid && mentionedJid.length > 0) {
-            const userToMention = mentionedJid[0];
+            const rawJid = mentionedJid[0];
+            const userToMention = (await repo.findUserIdByJid(rawJid)) || rawJid;
             const mentionInfo = await mentionsController.processSingleMention(userToMention, contactsCache);
             let replyText;
             
@@ -800,7 +802,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.startsWith("!ship")) {
-        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const rawMentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const mentionedJid = await Promise.all(rawMentions.map(r => repo.findUserIdByJid(r).then(id => id || r)));
         const inputText = textMessage.slice(5).trim();
         
         if (!inputText && mentionedJid.length === 0) {
@@ -874,7 +877,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.startsWith("!hug")) {
-        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const rawMentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const mentionedJid = await Promise.all(rawMentions.map(r => repo.findUserIdByJid(r).then(id => id || r)));
         const inputText = textMessage.slice(5).trim();
         
         if (!inputText && mentionedJid.length === 0) {
@@ -947,7 +951,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.startsWith("!transar")) {
-        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const rawMentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const mentionedJid = await Promise.all(rawMentions.map(r => repo.findUserIdByJid(r).then(id => id || r)));
         const inputText = textMessage.slice(8).trim();
         
         if (!inputText && mentionedJid.length === 0) {
@@ -1021,7 +1026,8 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
     }
 
     if (textMessage.startsWith("!arrebentar")) {
-        const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const rawMentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
+        const mentionedJid = await Promise.all(rawMentions.map(r => repo.findUserIdByJid(r).then(id => id || r)));
         const inputText = textMessage.slice(11).trim();
         
         if (!inputText && mentionedJid.length === 0) {
@@ -1125,7 +1131,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             } else if (targetUser.startsWith('@')) {
                 const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 if (mentions.length > 0) {
-                    targetUserId = mentions[0];
+                    targetUserId = (await repo.findUserIdByJid(mentions[0])) || mentions[0];
                 } else {
                     await sock.sendMessage(chatId, {
                         text: "❌ Usuário não encontrado na menção!"
@@ -1204,7 +1210,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             } else if (targetUser.startsWith('@')) {
                 const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 if (mentions.length > 0) {
-                    targetUserId = mentions[0];
+                    targetUserId = (await repo.findUserIdByJid(mentions[0])) || mentions[0];
                 } else {
                     await sock.sendMessage(chatId, {
                         text: "❌ Usuário não encontrado na menção!"
@@ -1279,7 +1285,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             } else if (targetUser.startsWith('@')) {
                 const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 if (mentions.length > 0) {
-                    targetUserId = mentions[0];
+                    targetUserId = (await repo.findUserIdByJid(mentions[0])) || mentions[0];
                 } else {
                     await sock.sendMessage(chatId, {
                         text: "❌ Usuário não encontrado na menção!"
@@ -1354,7 +1360,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             } else if (targetUser.startsWith('@')) {
                 const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 if (mentions.length > 0) {
-                    targetUserId = mentions[0];
+                    targetUserId = (await repo.findUserIdByJid(mentions[0])) || mentions[0];
                 } else {
                     await sock.sendMessage(chatId, {
                         text: "❌ Usuário não encontrado na menção!"
@@ -1429,7 +1435,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             } else if (targetUser.startsWith('@')) {
                 const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 if (mentions.length > 0) {
-                    targetUserId = mentions[0];
+                    targetUserId = (await repo.findUserIdByJid(mentions[0])) || mentions[0];
                 } else {
                     await sock.sendMessage(chatId, {
                         text: "❌ Usuário não encontrado na menção!"
@@ -1504,7 +1510,7 @@ async function jokesCommandsBot(sock, { messages }, contactsCache = {}) {
             } else if (targetUser.startsWith('@')) {
                 const mentions = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 if (mentions.length > 0) {
-                    targetUserId = mentions[0];
+                    targetUserId = (await repo.findUserIdByJid(mentions[0])) || mentions[0];
                 } else {
                     await sock.sendMessage(chatId, {
                         text: "❌ Usuário não encontrado na menção!"

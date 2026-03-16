@@ -1,4 +1,5 @@
 const { admins } = require("../../config/adm");
+const repo = require("../../database/repository");
 
 async function banCommandBot(sock, { messages }) {
     const msg = messages[0];
@@ -14,7 +15,8 @@ async function banCommandBot(sock, { messages }) {
     const isAdmin = admins.includes(sender);
     const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
 
-    const mentionedJid = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+    const rawMentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+    const mentionedJid = rawMentioned ? ((await repo.findUserIdByJid(rawMentioned)) || rawMentioned) : null;
 
     if (text.startsWith("!ban")) {
         if (!isAdmin) {
@@ -31,21 +33,23 @@ async function banCommandBot(sock, { messages }) {
             return;
         }
 
-        const groupMetadata = await sock.groupMetadata(groupId);
-        const botNumber = (await sock.user.id.split(":")[0]) + "@s.whatsapp.net";
-        const botInGroup = groupMetadata.participants.find(p => p.id === botNumber);
-
-        if (!botInGroup || !botInGroup.admin) {
+        try {
+            await sock.groupParticipantsUpdate(groupId, [mentionedJid], "remove");
             await sock.sendMessage(groupId, {
-                text: "⚠️ Eu preciso ser administrador para poder remover alguém do grupo."
+                text: `✅ Usuário removido com sucesso.`
             });
-            return;
+        } catch (err) {
+            const errMsg = (err?.message || String(err)).toLowerCase();
+            if (errMsg.includes('admin') || errMsg.includes('permission') || errMsg.includes('401') || errMsg.includes('403')) {
+                await sock.sendMessage(groupId, {
+                    text: "⚠️ Eu preciso ser administrador do grupo para poder remover alguém."
+                });
+            } else {
+                await sock.sendMessage(groupId, {
+                    text: `❌ Erro ao remover: ${err?.message || err}`
+                });
+            }
         }
-
-        await sock.groupParticipantsUpdate(groupId, [mentionedJid], "remove");
-        await sock.sendMessage(groupId, {
-            text: `✅ Usuário removido com sucesso.`
-        });
     }
 }
 
