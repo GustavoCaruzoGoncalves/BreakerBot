@@ -1174,12 +1174,12 @@ app.post('/api/aura/slot', async (req, res) => {
         }
 
         const tUserStart = Date.now();
-        const { userId: dbUserId, user, balance } = await repo.getAuraUserBasicByIdOrJid(session.userId);
+        const { userId: dbUserId, balance, exists } = await repo.getAuraBalanceByUserIdOrJid(session.userId);
         const tUserEnd = Date.now();
-        console.log('[slot][PERF] getAuraUserBasicByIdOrJid ms =', tUserEnd - tUserStart);
+        console.log('[slot][PERF] getAuraBalanceByUserIdOrJid ms =', tUserEnd - tUserStart);
 
-        if (!user) {
-            return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
+        if (!exists) {
+            return res.status(404).json({ error: 'user_not_found' });
         }
 
         const betAmount = Math.floor(Number(bet) || 0);

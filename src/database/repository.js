@@ -276,6 +276,40 @@ async function getAuraUserBasicByIdOrJid(requestedId) {
     return { userId: null, user: null, balance: 0 };
 }
 
+async function getAuraBalanceByUserIdOrJid(requestedId) {
+    if (!requestedId) {
+        return { userId: null, balance: 0, exists: false };
+    }
+
+    const raw = String(requestedId).trim();
+    const candidates = [];
+
+    if (raw.includes('@')) {
+        candidates.push(raw);
+    } else {
+        candidates.push(`${raw}@s.whatsapp.net`);
+        candidates.push(`${raw}@lid`);
+    }
+
+    const r = await query(`
+        SELECT u.user_id, COALESCE(a.aura_points, 0::bigint) AS aura_points
+        FROM users u
+        LEFT JOIN aura a ON a.user_id = u.user_id
+        WHERE u.user_id = ANY($1) OR u.jid = ANY($1)
+        LIMIT 1
+    `, [candidates]);
+
+    if (!r.rows[0]) {
+        return { userId: null, balance: 0, exists: false };
+    }
+
+    return {
+        userId: r.rows[0].user_id,
+        balance: Number(r.rows[0].aura_points),
+        exists: true
+    };
+}
+
 async function getUserById(userId) {
     const userResult = await query('SELECT * FROM users WHERE user_id = $1', [userId]);
     const row = userResult.rows[0];
@@ -526,7 +560,7 @@ async function incrementAuraPointsDirect(userId, amount) {
     const amt = Number(amount) || 0;
     await ensureAuraRow(userId);
     const r = await query(
-        `UPDATE aura SET aura_points = GREATEST(0, COALESCE(aura_points, 0) + $2::int), updated_at = NOW()
+        `UPDATE aura SET aura_points = GREATEST(0::bigint, COALESCE(aura_points, 0::bigint) + $2::bigint), updated_at = NOW()
          WHERE user_id = $1 RETURNING aura_points`,
         [userId, amt]
     );
@@ -550,10 +584,10 @@ async function applyAuraDeltaReturningBalance(userId, delta, requiredMinimumBala
 
     const r = await query(
         `UPDATE aura
-         SET aura_points = GREATEST(0, COALESCE(aura_points, 0) + $2::int),
+         SET aura_points = GREATEST(0::bigint, COALESCE(aura_points, 0::bigint) + $2::bigint),
              updated_at = NOW()
          WHERE user_id = $1
-           AND COALESCE(aura_points, 0) >= $3::int
+           AND COALESCE(aura_points, 0::bigint) >= $3::bigint
          RETURNING aura_points`,
         [userId, amt, Math.floor(Number(requiredMinimumBalance) || 0)]
     );
@@ -1123,6 +1157,7 @@ module.exports = {
     getUserById,
     getLevelRanking,
     getAuraRanking,
+    getAuraBalanceByUserIdOrJid,
     createUser,
     updateUser,
     patchUser,
