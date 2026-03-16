@@ -850,8 +850,9 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
     if (textMessage === "!me" || textMessage.startsWith("!me ")) {
         const userInfo = await levelSystem.getUserInfo(sender);
         const rank = userInfo.rank;
+        const mentionInfo = await mentionsController.processSingleMention(sender, contactsCache);
         
-        let meMessage = `👤 *Informações do Usuário*\n`;
+        let meMessage = `👤 *Informações de ${mentionInfo.mentionText}*\n`;
         
         if (admins.includes(sender)) {
             meMessage += `👑 ADMINISTRADOR⭐😎\n`;
@@ -881,7 +882,6 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
             meMessage += `🏅 Badges: ${userInfo.badges.join(', ')}\n`;
         }
         
-                const mentionInfo = await mentionsController.processSingleMention(sender, contactsCache);
         await sock.sendMessage(chatId, {
             text: meMessage,
             mentions: mentionInfo.mentions
@@ -938,8 +938,9 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
 
         const userInfo = await levelSystem.getUserInfo(targetUserId);
         const rank = userInfo.rank;
+        const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
         
-        let infoMessage = `👤 *Informações do Usuário*\n`;
+        let infoMessage = `👤 *Informações de ${mentionInfo.mentionText}*\n`;
         
         if (admins.includes(targetUserId)) {
             infoMessage += `👑 ADMINISTRADOR⭐😎\n`;
@@ -959,7 +960,6 @@ async function levelCommandBot(sock, evt, contactsCache = {}) {
             infoMessage += `🏅 Badges: ${userInfo.badges.join(', ')}\n`;
         }
         
-        const mentionInfo = await mentionsController.processSingleMention(targetUserId, contactsCache);
         await sock.sendMessage(chatId, {
             text: infoMessage,
             mentions: mentionInfo.mentions
