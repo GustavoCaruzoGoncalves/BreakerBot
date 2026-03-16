@@ -1268,24 +1268,24 @@ app.post('/api/aura/game-reward', async (req, res) => {
         if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
             return res.status(401).json({ success: false, message: 'Sessão inválida ou expirada' });
         }
-        const { userId: dbUserId, user } = await findAuraUserAndBalance(session.userId);
+        const { userId: dbUserId, user, balance: initialBalance } = await repo.getAuraUserBasicByIdOrJid(session.userId);
         if (!user) {
             return res.status(400).json({ success: false, message: 'Usuário não encontrado no sistema de aura' });
         }
         const reward = Math.floor(scoreNum);
+        let finalBalance = initialBalance;
         if (reward !== 0) {
-            const newTotal = await repo.incrementAuraPointsDirect(dbUserId, reward);
-            if (newTotal === null) {
-                console.error('[game-reward] incrementAuraPointsDirect retornou null para', dbUserId);
+            const result = await repo.applyAuraDeltaReturningBalance(dbUserId, reward, 0);
+            if (!result.ok) {
+                console.error('[game-reward] applyAuraDeltaReturningBalance falhou para', dbUserId, 'motivo:', result.reason);
                 return res.status(500).json({ success: false, message: 'Erro ao atualizar aura' });
             }
-            levelSystem.invalidateCache();
+            finalBalance = result.balance;
         }
-        const balance = await repo.getAuraPointsDirect(dbUserId);
         res.json({
             success: true,
             reward,
-            balance
+            balance: finalBalance
         });
     } catch (error) {
         console.error('Erro no game-reward:', error);
