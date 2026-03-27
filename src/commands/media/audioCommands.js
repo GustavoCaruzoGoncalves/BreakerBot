@@ -113,6 +113,8 @@ function chooseFallbackFormat(formatOutput, mediaType) {
         return /^\w+/.test(trimmed);
     });
 
+    if (formatLines.length === 0) return null;
+
     const audioFormats = [];
     const videoFormats = [];
 
@@ -133,7 +135,7 @@ function chooseFallbackFormat(formatOutput, mediaType) {
         if (audioFormats.length > 0) {
             return audioFormats[audioFormats.length - 1];
         }
-        return 'ba*/b';
+        return null;
     }
 
     const validVideo = videoFormats.filter(f => f.height <= 1080);
@@ -146,7 +148,7 @@ function chooseFallbackFormat(formatOutput, mediaType) {
     if (bestVideo) {
         return bestVideo.id;
     }
-    return 'bv*+ba/b';
+    return null;
 }
 
 function resolveDownloadedFile(outputDir, outputBase, outputPath) {
@@ -170,7 +172,7 @@ async function downloadWithYtdlp(url, outputPath, format, mediaType = 'video') {
     const outputBase = outputPath.replace(/\.[^/.]+$/, '');
     const outputDir = path.dirname(outputPath);
 
-    function buildArgs(fmt) {
+    function buildArgs(fmt, extraArgs = []) {
         const args = [
             url,
             '-o', outputBase + '.%(ext)s',
@@ -181,65 +183,84 @@ async function downloadWithYtdlp(url, outputPath, format, mediaType = 'video') {
             '--merge-output-format', 'mp4',
             '--ffmpeg-location', ffmpegPath.replace(/ffmpeg(\.exe)?$/, ''),
             '--force-overwrites',
+            ...extraArgs,
         ];
         if (fs.existsSync(COOKIES_PATH)) args.push('--cookies', COOKIES_PATH);
         return args;
+    }
+
+    function tryDownload(args) {
+        console.log('[yt-dlp] Executando: yt-dlp', args.join(' '));
+        const result = spawnSync('yt-dlp', args, { encoding: 'utf-8', env: process.env });
+        if (result.stdout) process.stdout.write(result.stdout);
+        if (result.stderr) process.stderr.write(result.stderr);
+        return result;
     }
 
     if (fs.existsSync(COOKIES_PATH)) {
         console.log('[yt-dlp] Usando cookies de:', COOKIES_PATH);
     }
 
-    const args = buildArgs(format);
-    console.log('[yt-dlp] Executando: yt-dlp', args.join(' '));
+    // Tentativa 1: formato original
+    const result = tryDownload(buildArgs(format));
+    if (result.status === 0) {
+        resolveDownloadedFile(outputDir, outputBase, outputPath);
+        return;
+    }
 
-    const result = spawnSync('yt-dlp', args, {
-        encoding: 'utf-8',
-        env: process.env
-    });
-
-    if (result.stdout) process.stdout.write(result.stdout);
-    if (result.stderr) process.stderr.write(result.stderr);
-
-    if (result.status !== 0) {
-        const errorOutput = (result.stderr || '') + (result.stdout || '');
-
-        if (errorOutput.includes('Requested format is not available')) {
-            console.log('[yt-dlp] Formato solicitado indisponível. Listando formatos disponíveis...');
-
-            const formatOutput = listFormats(url);
-            if (formatOutput) {
-                console.log('[yt-dlp] Formatos disponíveis:\n' + formatOutput);
-
-                const fallbackFormat = chooseFallbackFormat(formatOutput, mediaType);
-                if (fallbackFormat) {
-                    console.log(`[yt-dlp] Tentando formato alternativo: ${fallbackFormat}`);
-
-                    const retryArgs = buildArgs(fallbackFormat);
-                    console.log('[yt-dlp] Executando: yt-dlp', retryArgs.join(' '));
-
-                    const retryResult = spawnSync('yt-dlp', retryArgs, {
-                        encoding: 'utf-8',
-                        env: process.env
-                    });
-
-                    if (retryResult.stdout) process.stdout.write(retryResult.stdout);
-                    if (retryResult.stderr) process.stderr.write(retryResult.stderr);
-
-                    if (retryResult.status === 0) {
-                        resolveDownloadedFile(outputDir, outputBase, outputPath);
-                        return;
-                    }
-
-                    throw new Error(`yt-dlp falhou com formato alternativo (${fallbackFormat}), código ${retryResult.status}`);
-                }
-            }
-        }
-
+    const errorOutput = (result.stderr || '') + (result.stdout || '');
+    if (!errorOutput.includes('Requested format is not available')) {
         throw new Error(`yt-dlp falhou com código ${result.status}`);
     }
 
-    resolveDownloadedFile(outputDir, outputBase, outputPath);
+    // Tentativa 2: listar formatos e escolher um disponível
+    console.log('[yt-dlp] Formato solicitado indisponível. Listando formatos disponíveis...');
+    const formatOutput = listFormats(url);
+    if (formatOutput) {
+        console.log('[yt-dlp] Formatos disponíveis:\n' + formatOutput);
+        const fallbackFormat = chooseFallbackFormat(formatOutput, mediaType);
+        if (fallbackFormat) {
+            console.log(`[yt-dlp] Tentando formato alternativo: ${fallbackFormat}`);
+            const retryResult = tryDownload(buildArgs(fallbackFormat));
+            if (retryResult.status === 0) {
+                resolveDownloadedFile(outputDir, outputBase, outputPath);
+                return;
+            }
+        } else {
+            console.log('[yt-dlp] Nenhum formato real encontrado (apenas storyboards). Tentando player clients alternativos...');
+        }
+    }
+
+    // Tentativa 3: forçar diferentes player clients do YouTube
+    const genericFormat = mediaType === 'audio'
+        ? 'bestaudio/best'
+        : 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best';
+    const playerClients = ['ios', 'android', 'ios,web', 'android,ios', 'mweb'];
+
+    for (const client of playerClients) {
+        console.log(`[yt-dlp] Tentando player_client=${client} com formato: ${genericFormat}`);
+        const clientResult = tryDownload(buildArgs(genericFormat, [
+            '--extractor-args', `youtube:player_client=${client}`
+        ]));
+        if (clientResult.status === 0) {
+            resolveDownloadedFile(outputDir, outputBase, outputPath);
+            return;
+        }
+    }
+
+    // Tentativa 4: último recurso — sem restrição de formato nenhuma
+    console.log('[yt-dlp] Último recurso: tentando sem restrição de formato...');
+    for (const client of ['ios', 'android']) {
+        const lastResult = tryDownload(buildArgs('best', [
+            '--extractor-args', `youtube:player_client=${client}`
+        ]));
+        if (lastResult.status === 0) {
+            resolveDownloadedFile(outputDir, outputBase, outputPath);
+            return;
+        }
+    }
+
+    throw new Error('yt-dlp falhou: nenhum formato disponível após todas as tentativas');
 }
 
 async function audioCommandsBot(sock, { messages }) {
