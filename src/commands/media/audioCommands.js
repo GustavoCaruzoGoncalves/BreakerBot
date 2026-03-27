@@ -85,42 +85,75 @@ function generateVideoThumbnail(videoPath, outputPath) {
     });
 }
 
-async function downloadWithYtdlp(url, outputPath, format) {
-    const outputBase = outputPath.replace(/\.[^/.]+$/, '');
-    const outputDir = path.dirname(outputPath);
-    
+function listFormats(url) {
     const args = [
         url,
-        '-o', outputBase + '.%(ext)s',
-        '-f', format,
-        '--no-check-certificates',
+        '--list-formats',
         '--no-warnings',
         '--remote-components', 'ejs:github',
-        '--merge-output-format', 'mp4',
-        '--ffmpeg-location', ffmpegPath.replace(/ffmpeg(\.exe)?$/, ''),
-        '--force-overwrites',
     ];
+    if (fs.existsSync(COOKIES_PATH)) args.push('--cookies', COOKIES_PATH);
 
-    if (fs.existsSync(COOKIES_PATH)) {
-        args.push('--cookies', COOKIES_PATH);
-        console.log('[yt-dlp] Usando cookies de:', COOKIES_PATH);
+    const result = spawnSync('yt-dlp', args, { encoding: 'utf-8', env: process.env });
+    if (result.status === 0 && result.stdout) {
+        return result.stdout;
     }
+    return null;
+}
 
-    console.log('[yt-dlp] Executando: yt-dlp', args.join(' '));
+function chooseFallbackFormat(formatOutput, mediaType) {
+    if (!formatOutput) return null;
 
-    const result = spawnSync('yt-dlp', args, { 
-        stdio: 'inherit',
-        env: process.env 
+    const lines = formatOutput.split('\n');
+
+    const formatLines = lines.filter(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('ID') || trimmed.startsWith('─') || trimmed.startsWith('-')) return false;
+        if (trimmed.includes('storyboard') || trimmed.includes('images')) return false;
+        return /^\w+/.test(trimmed);
     });
 
-    if (result.status !== 0) {
-        throw new Error(`yt-dlp falhou com código ${result.status}`);
+    const audioFormats = [];
+    const videoFormats = [];
+
+    for (const line of formatLines) {
+        const id = line.trim().split(/\s+/)[0];
+
+        if (line.includes('audio only')) {
+            audioFormats.push(id);
+        } else {
+            const resMatch = line.match(/(\d+)x(\d+)/);
+            if (resMatch) {
+                videoFormats.push({ id, height: parseInt(resMatch[2]) });
+            }
+        }
     }
 
+    if (mediaType === 'audio') {
+        if (audioFormats.length > 0) {
+            return audioFormats[audioFormats.length - 1];
+        }
+        return 'ba*/b';
+    }
+
+    const validVideo = videoFormats.filter(f => f.height <= 1080);
+    const bestVideo = validVideo.length > 0 ? validVideo[validVideo.length - 1] : (videoFormats.length > 0 ? videoFormats[videoFormats.length - 1] : null);
+    const bestAudio = audioFormats.length > 0 ? audioFormats[audioFormats.length - 1] : null;
+
+    if (bestVideo && bestAudio) {
+        return `${bestVideo.id}+${bestAudio.id}`;
+    }
+    if (bestVideo) {
+        return bestVideo.id;
+    }
+    return 'bv*+ba/b';
+}
+
+function resolveDownloadedFile(outputDir, outputBase, outputPath) {
     const files = fs.readdirSync(outputDir);
     const baseName = path.basename(outputBase);
-    const downloadedFile = files.find(f => f.startsWith(baseName) && !f.includes('.f') && (f.endsWith('.mp4') || f.endsWith('.webm') || f.endsWith('.mkv')));
-    
+    const downloadedFile = files.find(f => f.startsWith(baseName) && !f.includes('.f') && (f.endsWith('.mp4') || f.endsWith('.webm') || f.endsWith('.mkv') || f.endsWith('.m4a') || f.endsWith('.opus') || f.endsWith('.mp3')));
+
     if (downloadedFile) {
         const downloadedPath = path.join(outputDir, downloadedFile);
         if (downloadedPath !== outputPath) {
@@ -131,6 +164,82 @@ async function downloadWithYtdlp(url, outputPath, format) {
     files.filter(f => f.startsWith(baseName) && f.includes('.f')).forEach(f => {
         try { fs.unlinkSync(path.join(outputDir, f)); } catch(e) {}
     });
+}
+
+async function downloadWithYtdlp(url, outputPath, format, mediaType = 'video') {
+    const outputBase = outputPath.replace(/\.[^/.]+$/, '');
+    const outputDir = path.dirname(outputPath);
+
+    function buildArgs(fmt) {
+        const args = [
+            url,
+            '-o', outputBase + '.%(ext)s',
+            '-f', fmt,
+            '--no-check-certificates',
+            '--no-warnings',
+            '--remote-components', 'ejs:github',
+            '--merge-output-format', 'mp4',
+            '--ffmpeg-location', ffmpegPath.replace(/ffmpeg(\.exe)?$/, ''),
+            '--force-overwrites',
+        ];
+        if (fs.existsSync(COOKIES_PATH)) args.push('--cookies', COOKIES_PATH);
+        return args;
+    }
+
+    if (fs.existsSync(COOKIES_PATH)) {
+        console.log('[yt-dlp] Usando cookies de:', COOKIES_PATH);
+    }
+
+    const args = buildArgs(format);
+    console.log('[yt-dlp] Executando: yt-dlp', args.join(' '));
+
+    const result = spawnSync('yt-dlp', args, {
+        encoding: 'utf-8',
+        env: process.env
+    });
+
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+
+    if (result.status !== 0) {
+        const errorOutput = (result.stderr || '') + (result.stdout || '');
+
+        if (errorOutput.includes('Requested format is not available')) {
+            console.log('[yt-dlp] Formato solicitado indisponível. Listando formatos disponíveis...');
+
+            const formatOutput = listFormats(url);
+            if (formatOutput) {
+                console.log('[yt-dlp] Formatos disponíveis:\n' + formatOutput);
+
+                const fallbackFormat = chooseFallbackFormat(formatOutput, mediaType);
+                if (fallbackFormat) {
+                    console.log(`[yt-dlp] Tentando formato alternativo: ${fallbackFormat}`);
+
+                    const retryArgs = buildArgs(fallbackFormat);
+                    console.log('[yt-dlp] Executando: yt-dlp', retryArgs.join(' '));
+
+                    const retryResult = spawnSync('yt-dlp', retryArgs, {
+                        encoding: 'utf-8',
+                        env: process.env
+                    });
+
+                    if (retryResult.stdout) process.stdout.write(retryResult.stdout);
+                    if (retryResult.stderr) process.stderr.write(retryResult.stderr);
+
+                    if (retryResult.status === 0) {
+                        resolveDownloadedFile(outputDir, outputBase, outputPath);
+                        return;
+                    }
+
+                    throw new Error(`yt-dlp falhou com formato alternativo (${fallbackFormat}), código ${retryResult.status}`);
+                }
+            }
+        }
+
+        throw new Error(`yt-dlp falhou com código ${result.status}`);
+    }
+
+    resolveDownloadedFile(outputDir, outputBase, outputPath);
 }
 
 async function audioCommandsBot(sock, { messages }) {
@@ -169,7 +278,7 @@ async function audioCommandsBot(sock, { messages }) {
 
             await sock.sendMessage(sender, searchingMessage, { quoted: msg });
 
-            await downloadWithYtdlp(query, audioPath, 'bestaudio/best');
+            await downloadWithYtdlp(query, audioPath, 'bestaudio/best', 'audio');
 
             await new Promise((resolve, reject) => {
                 ffmpeg(audioPath)
@@ -234,7 +343,7 @@ async function audioCommandsBot(sock, { messages }) {
 
             await sock.sendMessage(sender, searchingMessage, { quoted: msg });
 
-            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080][vcodec^=avc]+bestaudio/best[height<=1080]');
+            await downloadWithYtdlp(query, videoPath, 'bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080][vcodec^=avc]+bestaudio/best[height<=1080]', 'video');
 
             if (!fs.existsSync(videoPath)) {
                 throw new Error('Arquivo não foi baixado');
